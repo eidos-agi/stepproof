@@ -1,23 +1,17 @@
 [project]
-name = "stepproof-mcp"
+name = "stepproof-state"
 version = "0.0.1"
-description = "StepProof MCP server — exposes StepProof governance over Model Context Protocol"
+description = "StepProof state-directory primitives — atomic writes, runtime discovery, active-run binding"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "BUSL-1.1" }
 authors = [{ name = "Eidos AGI", email = "daniel@eidosagi.com" }]
 
-dependencies = [
-    "mcp>=1.2",
-    "httpx>=0.27",
-    "pydantic>=2.9",
-    "stepproof-runtime",
-    "stepproof-state",
-]
+dependencies = []
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/stepproof_mcp"]
+packages = ["src/stepproof_state"]

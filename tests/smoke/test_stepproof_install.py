@@ -81,6 +81,30 @@ def test_install_writes_action_classification(temp_scope):
     assert (base / "stepproof" / "action_classification.yaml").is_file()
 
 
+def test_installed_hook_loads_classification(temp_scope):
+    """Post-install, hook must find action_classification.yaml via its default
+    relative path (without requiring STEPPROOF_CLASSIFICATION env var).
+    Regression: the hook used parents[1] / "action_classification.yaml" which
+    resolved to <base>/ instead of <base>/stepproof/ after install."""
+    base, project = temp_scope
+    install(scope="user", project_dir=project)
+    hook = base / "hooks" / "stepproof_pretooluse.py"
+    # Ring 0 MCP meta call — should exit 0 if classification loads.
+    event = {"tool_name": "mcp__stepproof__stepproof_runbook_list", "tool_input": {}, "session_id": "t"}
+    # Pass through env, but strip STEPPROOF_CLASSIFICATION so we test the default.
+    import os, subprocess, json as _json
+    env = {k: v for k, v in os.environ.items() if k != "STEPPROOF_CLASSIFICATION"}
+    env.setdefault("STEPPROOF_URL", "http://127.0.0.1:1")
+    env.setdefault("STEPPROOF_TIMEOUT_MS", "200")
+    r = subprocess.run(
+        ["uv", "run", "--script", str(hook)],
+        input=_json.dumps(event), text=True, capture_output=True, env=env, timeout=30,
+    )
+    assert r.returncode == 0, (
+        f"Hook blocked post-install — classification path didn't resolve. stderr={r.stderr}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Install: settings.json registration
 # ---------------------------------------------------------------------------

@@ -148,15 +148,42 @@ Rationale: a StepProof outage in enforcement mode would brick every Claude Code 
 
 **Exception**: for Ring 3 actions specifically, the hook can be configured (opt-in, per deployment) to **fail closed** — exit 2 with "StepProof unreachable; production-facing actions blocked until enforcement restored." Default is fail-open with audit; high-security deployments flip this.
 
-### E. Daemon Auto-Start
+### E. Runtime Discovery
 
-First hook invocation that can't reach the daemon:
+The port `8787` is a last-resort fallback, not a load-bearing default. Every component participating in a session agrees on the runtime through `.stepproof/runtime.url`:
 
-1. Checks `.stepproof/runtime.pid`. If a PID exists and is alive → daemon is in the middle of starting; wait 200ms, retry once.
-2. If no PID or PID is dead → spawn the daemon detached (`stepproof runtime --detach`), write PID file, wait 500ms, retry.
-3. If still unreachable → degrade per (D).
+```json
+{
+  "url":        "http://127.0.0.1:54823",
+  "pid":        41271,
+  "started_at": "2026-04-20T16:24:01Z"
+}
+```
 
-This makes the setup story: `stepproof install` wires Claude Code, and the first session starts the daemon transparently. No user-visible daemon management.
+**Writer.** Whichever component owns the runtime — the MCP server's embedded runtime or a standalone `stepproof runtime` daemon — publishes the file atomically (tmp + fsync + rename) once its port is bound. It also registers an `atexit` hook and SIGTERM/SIGINT handlers so the file disappears on clean shutdown. The MCP server implementation lives in `packages/stepproof-mcp/src/stepproof_mcp/server.py`; the primitives it uses are in `packages/stepproof-state/`.
+
+**Reader.** The hook resolves the daemon URL on each invocation:
+
+1. Respect `STEPPROOF_URL` if the operator set one explicitly.
+2. Otherwise read `.stepproof/runtime.url` and check that the writer's PID is still alive (`os.kill(pid, 0)`).
+3. If the PID is dead, reap the stale file and fall back to `http://127.0.0.1:8787`. An unreachable runtime trips the usual graceful-degradation rules (D).
+
+**Why PID-liveness, not URL ping.** The hook runs on every tool call; any extra HTTP round-trip dominates the latency budget. PID-liveness is a syscall. A live PID with a dead port is rare and will be caught by the actual policy-eval call a few milliseconds later; a dead PID with a stale URL file is common (`kill -9`, crashes) and must be reaped cheaply.
+
+**Active-run binding.** When the agent declares a plan (`stepproof_keep_me_honest`) or starts a runbook (`stepproof_run_start`), the MCP server also writes `.stepproof/active-run.json`:
+
+```json
+{
+  "run_id":        "uuid",
+  "current_step":  "s2",
+  "allowed_tools": ["Edit", "git"],
+  "template_id":   "rb-declared-abc123"
+}
+```
+
+The hook reads this alongside the session file. If `allowed_tools` is populated and the proposed tool is not in it, the hook exits 2 with a structural deny — no daemon round-trip needed. Per-step scoping runs before the Ring 0 short-circuit because keep-me-honest is a promise that the agent stays inside its declared toolset; a Read that wasn't declared is still a deviation worth surfacing.
+
+See `docs/RUNTIME_HANDSHAKE.md` for the handshake protocol, failure modes, and test matrix.
 
 ## The Installation Surface
 

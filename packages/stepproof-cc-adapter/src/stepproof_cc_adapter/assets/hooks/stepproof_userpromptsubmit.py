@@ -23,7 +23,7 @@ from pathlib import Path
 
 CLASSIFICATION_PATH = os.getenv(
     "STEPPROOF_CLASSIFICATION",
-    str(Path(__file__).resolve().parents[1] / "action_classification.yaml"),
+    str(Path(__file__).resolve().parents[1] / "stepproof" / "action_classification.yaml"),
 )
 
 

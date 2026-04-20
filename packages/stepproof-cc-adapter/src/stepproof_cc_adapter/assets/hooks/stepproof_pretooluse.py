@@ -28,6 +28,90 @@ import time
 from pathlib import Path
 
 
+# --- BEGIN vendored stepproof_state (kept in lockstep with
+#     packages/stepproof-state; hook ships standalone via `stepproof install`
+#     so it cannot import the workspace package). ---
+
+_RUNTIME_URL_FILE = "runtime.url"
+_ACTIVE_RUN_FILE = "active-run.json"
+
+
+def _state_dir() -> Path:
+    override = os.environ.get("STEPPROOF_STATE_DIR")
+    if override:
+        return Path(override)
+    return Path.cwd() / ".stepproof"
+
+
+def _atomic_remove(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
+
+def _is_pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+    return True
+
+
+def _read_runtime_record(base: Path | None = None) -> dict | None:
+    path = (base or _state_dir()) / _RUNTIME_URL_FILE
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            "url": str(data["url"]).rstrip("/"),
+            "pid": int(data.get("pid", 0)),
+            "started_at": str(data.get("started_at", "")),
+        }
+    except Exception:
+        return None
+
+
+def _clear_runtime_url(base: Path | None = None) -> None:
+    _atomic_remove((base or _state_dir()) / _RUNTIME_URL_FILE)
+
+
+def _resolve_runtime_url(base: Path | None = None) -> str | None:
+    if os.environ.get("STEPPROOF_URL"):
+        return os.environ["STEPPROOF_URL"].rstrip("/")
+    record = _read_runtime_record(base=base)
+    if record is None:
+        return None
+    if record["pid"] and not _is_pid_alive(record["pid"]):
+        _clear_runtime_url(base=base)
+        return None
+    return record["url"]
+
+
+def _resolve_active_run(base: Path | None = None) -> dict | None:
+    path = (base or _state_dir()) / _ACTIVE_RUN_FILE
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            "run_id": str(data["run_id"]),
+            "current_step": data.get("current_step"),
+            "allowed_tools": list(data.get("allowed_tools") or []),
+            "template_id": data.get("template_id"),
+        }
+    except Exception:
+        return None
+
+
+# --- END vendored stepproof_state ---
+
+
 def _glob_to_regex(pattern: str) -> re.Pattern:
     parts = []
     i = 0
@@ -56,11 +140,11 @@ def _glob_to_regex(pattern: str) -> re.Pattern:
 def _glob_match(pattern: str, path: str) -> bool:
     return bool(_glob_to_regex(pattern).match(path))
 
-DAEMON_URL = os.getenv("STEPPROOF_URL", "http://127.0.0.1:8787")
-STATE_DIR = Path(os.getenv("STEPPROOF_STATE_DIR", ".stepproof"))
+DAEMON_URL_DEFAULT = "http://127.0.0.1:8787"
+STATE_DIR = _state_dir()
 CLASSIFICATION_PATH = os.getenv(
     "STEPPROOF_CLASSIFICATION",
-    str(Path(__file__).resolve().parents[1] / "action_classification.yaml"),
+    str(Path(__file__).resolve().parents[1] / "stepproof" / "action_classification.yaml"),
 )
 TIMEOUT_MS = int(os.getenv("STEPPROOF_TIMEOUT_MS", "500"))
 
@@ -201,12 +285,22 @@ def _buffer_audit(payload: dict, reason: str) -> None:
         pass
 
 
+def _resolve_daemon_url() -> str:
+    """Resolve the active runtime's URL via `.stepproof/runtime.url` (with
+    PID-liveness check) or `STEPPROOF_URL`. Falls back to the legacy default
+    only as a last resort so existing manual setups keep working."""
+    url = _resolve_runtime_url()
+    if url:
+        return url
+    return DAEMON_URL_DEFAULT
+
+
 def _call_daemon(payload: dict) -> dict | None:
     try:
         import httpx
 
         r = httpx.post(
-            f"{DAEMON_URL.rstrip('/')}/policy/evaluate",
+            f"{_resolve_daemon_url().rstrip('/')}/policy/evaluate",
             json=payload,
             timeout=TIMEOUT_MS / 1000,
         )
@@ -228,7 +322,11 @@ def main() -> None:
         session_id = event.get("session_id") or "unknown"
 
         session = _load_session(session_id)
+        active = _resolve_active_run() or {}
         env = session.get("environment") or os.getenv("STEPPROOF_ENV", "staging")
+        bound_run_id = session.get("run_id") or active.get("run_id")
+        bound_step_id = session.get("current_step") or active.get("current_step")
+        allowed_tools = list(active.get("allowed_tools") or [])
 
         cls, cls_loaded = _load_classification()
         # Per code-review finding: when classification fails to load, do NOT
@@ -259,6 +357,19 @@ def main() -> None:
             print(msg, file=sys.stderr)
             sys.exit(2)
 
+        # Per-step scoping: if a run is bound and declares allowed_tools, a
+        # tool not in that list is a structural deny — no daemon round-trip.
+        # This gate runs BEFORE the Ring 0 short-circuit on purpose: keep-me-
+        # honest is a promise that the agent stays inside its declared toolset,
+        # and a read that wasn't declared is still a deviation.
+        if allowed_tools and tool_name not in allowed_tools:
+            print(
+                f"[stepproof] tool '{tool_name}' is not in allowed_tools for "
+                f"step '{bound_step_id}' (allowed: {', '.join(allowed_tools)})",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
         # Ring 0 — never bother the daemon.
         if ring == 0:
             sys.exit(0)
@@ -269,8 +380,8 @@ def main() -> None:
             "action_type": result["action_type"],
             "ring": ring,
             "target_env": env,
-            "run_id": session.get("run_id"),
-            "step_id": session.get("current_step"),
+            "run_id": bound_run_id,
+            "step_id": bound_step_id,
             "actor_id": session_id,
             "human_owner_id": os.getenv("STEPPROOF_HUMAN_OWNER", "unknown"),
             "message": (tool_input.get("command") or "")[:500],

@@ -4,7 +4,7 @@ Deterministic per ADR-0001 — no LLM in this path. The classifier maps a
 (tool_name, tool_input, environment) triple into a ClassifyResult carrying
 action_type, ring, and optional deny-with-reason.
 
-The YAML shape is documented at src/stepproof_cc_adapter/assets/action_classification.yaml.
+The YAML shape is documented at src/stepproof_cc_adapter/assets/stepproof/action_classification.yaml.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ class ClassifyResult:
 
 
 DEFAULT_CLASSIFICATION_YAML = (
-    Path(__file__).parent / "assets" / "action_classification.yaml"
+    Path(__file__).parent / "assets" / "stepproof" / "action_classification.yaml"
 )
 
 

@@ -171,7 +171,7 @@ def install(scope: str = "user", project_dir: Path | None = None) -> Manifest:
     #    but keeping a copy in <base>/stepproof/ lets operators tune per-scope.
     stepproof_cfg_dir = base / "stepproof"
     stepproof_cfg_dir.mkdir(parents=True, exist_ok=True)
-    cls_src = ASSETS_ROOT / "action_classification.yaml"
+    cls_src = ASSETS_ROOT / "stepproof" / "action_classification.yaml"
     cls_dst = stepproof_cfg_dir / "action_classification.yaml"
     shutil.copy2(cls_src, cls_dst)
     manifest.files_written.append(str(cls_dst))

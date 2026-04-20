@@ -5,18 +5,30 @@ Exposes StepProof governance tools over Model Context Protocol. Two modes:
 - Embedded (default): if STEPPROOF_URL is unset, spawn an in-process runtime
   with SQLite. Zero-install, single-user, good for local dev.
 - Hosted: STEPPROOF_URL=https://... makes this a thin HTTP client.
+
+Whichever mode, the server publishes its base URL to ``.stepproof/runtime.url``
+so the PreToolUse hook (and any other adapter) can find it without guessing at
+ports. See ``docs/RUNTIME_HANDSHAKE.md``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import atexit
 import os
+import signal
 import socket
 from contextlib import closing
 from typing import Any
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from stepproof_state import (
+    clear_active_run,
+    clear_runtime_url,
+    write_active_run,
+    write_runtime_url,
+)
 
 
 def _pick_port() -> int:
@@ -27,10 +39,49 @@ def _pick_port() -> int:
 
 _embedded_task: asyncio.Task | None = None
 _embedded_url: str | None = None
+_cleanup_installed = False
+
+
+def _install_cleanup() -> None:
+    """Register atexit + SIGTERM/SIGINT handlers once per process.
+
+    The owning process of the embedded runtime must delete ``runtime.url`` on
+    exit so later readers do not chase a dead PID. Signal handlers translate
+    termination into ``SystemExit``, which lets ``atexit`` run.
+    """
+    global _cleanup_installed
+    if _cleanup_installed:
+        return
+    _cleanup_installed = True
+
+    def _on_exit() -> None:
+        try:
+            clear_runtime_url()
+        except Exception:
+            pass
+
+    atexit.register(_on_exit)
+
+    def _on_signal(signum: int, _frame: Any) -> None:
+        try:
+            clear_runtime_url()
+        finally:
+            raise SystemExit(128 + signum)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(sig, _on_signal)
+        except (ValueError, OSError):
+            # Not in main thread (e.g. under some test harnesses) — skip.
+            pass
 
 
 async def _start_embedded_runtime() -> str:
-    """Start the runtime in-process on a free port; return its base URL."""
+    """Start the runtime in-process on a free port; return its base URL.
+
+    Publishes ``.stepproof/runtime.url`` once uvicorn has bound its port, and
+    installs cleanup so the file is removed on process exit.
+    """
     global _embedded_task, _embedded_url
     if _embedded_url is not None:
         return _embedded_url
@@ -50,12 +101,28 @@ async def _start_embedded_runtime() -> str:
         if server.started:
             break
     _embedded_url = f"http://127.0.0.1:{port}"
+
+    _install_cleanup()
+    try:
+        write_runtime_url(_embedded_url)
+    except Exception:
+        # Never crash boot on state-dir failure; the hook will fall back.
+        pass
+
     return _embedded_url
 
 
 async def _base_url() -> str:
     explicit = os.getenv("STEPPROOF_URL")
     if explicit:
+        # Even in hosted mode, publish the URL so hooks have a single
+        # discovery mechanism. PID is this process — not the runtime's, but
+        # "the owner of this binding."
+        try:
+            write_runtime_url(explicit.rstrip("/"))
+            _install_cleanup()
+        except Exception:
+            pass
         return explicit.rstrip("/")
     return await _start_embedded_runtime()
 
@@ -63,6 +130,29 @@ async def _base_url() -> str:
 async def _client() -> httpx.AsyncClient:
     base = await _base_url()
     return httpx.AsyncClient(base_url=base, timeout=30.0)
+
+
+def _extract_allowed_tools(steps: list[dict[str, Any]], step_id: str | None) -> list[str]:
+    if not step_id:
+        return []
+    for s in steps:
+        if s.get("step_id") == step_id:
+            return list(s.get("allowed_tools") or [])
+    return []
+
+
+async def _fetch_runbook_allowed_tools(
+    c: httpx.AsyncClient, template_id: str, step_id: str | None
+) -> list[str]:
+    if not step_id:
+        return []
+    try:
+        rr = await c.get(f"/runbooks/{template_id}")
+        rr.raise_for_status()
+        steps = (rr.json() or {}).get("steps") or []
+        return _extract_allowed_tools(steps, step_id)
+    except Exception:
+        return []
 
 
 mcp = FastMCP("stepproof")
@@ -87,7 +177,21 @@ async def stepproof_run_start(
             },
         )
         r.raise_for_status()
-        return r.json()
+        data = r.json()
+        try:
+            run_id = str(data.get("run_id"))
+            current_step = data.get("current_step")
+            allowed = await _fetch_runbook_allowed_tools(c, template_id, current_step)
+            if run_id:
+                write_active_run(
+                    run_id=run_id,
+                    current_step=current_step,
+                    allowed_tools=allowed,
+                    template_id=template_id,
+                )
+        except Exception:
+            pass
+        return data
 
 
 @mcp.tool()
@@ -111,7 +215,24 @@ async def stepproof_step_complete(
             json={"evidence": evidence},
         )
         r.raise_for_status()
-        return r.json()
+        data = r.json()
+        try:
+            status = (data.get("run") or {}).get("status") or data.get("status")
+            next_step = (data.get("run") or {}).get("current_step") or data.get("next_step")
+            if status and str(status).upper() in ("COMPLETED", "FAILED", "ABANDONED"):
+                clear_active_run()
+            elif next_step:
+                template_id = (data.get("run") or {}).get("template_id")
+                allowed = await _fetch_runbook_allowed_tools(c, template_id, next_step) if template_id else []
+                write_active_run(
+                    run_id=run_id,
+                    current_step=next_step,
+                    allowed_tools=allowed,
+                    template_id=template_id,
+                )
+        except Exception:
+            pass
+        return data
 
 
 @mcp.tool()
@@ -219,7 +340,23 @@ async def stepproof_keep_me_honest(
             # Return the structured validation errors so the agent can fix them.
             return {"status": "rejected", **r.json().get("detail", {})}
         r.raise_for_status()
-        return {"status": "accepted", **r.json()}
+        data = r.json()
+        try:
+            run = data.get("run") or {}
+            run_id = str(run.get("run_id"))
+            current_step = run.get("current_step")
+            template_id = data.get("template_id") or run.get("template_id")
+            allowed = _extract_allowed_tools(steps, current_step)
+            if run_id:
+                write_active_run(
+                    run_id=run_id,
+                    current_step=current_step,
+                    allowed_tools=allowed,
+                    template_id=template_id,
+                )
+        except Exception:
+            pass
+        return {"status": "accepted", **data}
 
 
 @mcp.tool()

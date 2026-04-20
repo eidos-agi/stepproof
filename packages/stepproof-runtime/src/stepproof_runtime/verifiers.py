@@ -304,6 +304,81 @@ async def verify_file_exists(evidence: dict[str, Any], context: dict[str, Any]) 
     }
 
 
+@register("verify_round_marker", Tier.TIER1)
+async def verify_round_marker(
+    evidence: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    """Step-aware marker verifier for multi-round game plans.
+
+    Derives the expected marker path from ``context.step_id`` (``sN`` →
+    ``<state_dir>/round-N-done.txt``) and rejects mismatched evidence.
+    Closes the step-blind gap in ``verify_file_exists`` that lets the
+    same file satisfy every step of a multi-step run.
+
+    Evidence schema:
+        round_number: int — must equal N from step_id ``sN``; rejected otherwise.
+
+    Context (injected by runtime):
+        step_id: str — e.g. ``s3``.
+    """
+    import os
+    from pathlib import Path
+
+    step_id = str(context.get("step_id", ""))
+    if not (step_id.startswith("s") and step_id[1:].isdigit()):
+        return {
+            "status": "fail",
+            "reason": (
+                f"verify_round_marker requires step_ids of the form 'sN'; "
+                f"got {step_id!r}"
+            ),
+        }
+    expected_n = int(step_id[1:])
+
+    claimed = evidence.get("round_number")
+    if claimed is None:
+        return {
+            "status": "fail",
+            "reason": "Missing 'round_number' in evidence.",
+        }
+    try:
+        claimed_n = int(claimed)
+    except (TypeError, ValueError):
+        return {
+            "status": "fail",
+            "reason": f"'round_number' must be an integer; got {claimed!r}",
+        }
+    if claimed_n != expected_n:
+        return {
+            "status": "fail",
+            "reason": (
+                f"Evidence round_number={claimed_n} does not match step "
+                f"{step_id} (expected {expected_n}). Cannot reuse one round's "
+                f"evidence for another step."
+            ),
+        }
+
+    state_dir_env = os.environ.get("STEPPROOF_STATE_DIR")
+    state_dir = Path(state_dir_env) if state_dir_env else Path.cwd() / ".stepproof"
+    marker = state_dir / f"round-{expected_n}-done.txt"
+    if not marker.exists():
+        return {
+            "status": "fail",
+            "reason": f"Round {expected_n} marker does not exist at {marker}.",
+        }
+    content = marker.read_text(encoding="utf-8").strip()
+    if not content:
+        return {
+            "status": "fail",
+            "reason": f"Round {expected_n} marker is empty.",
+        }
+    return {
+        "status": "pass",
+        "reason": f"Round {expected_n} marker verified.",
+        "artifacts": {"path": str(marker), "step_id": step_id},
+    }
+
+
 @register("verify_playtest_log", Tier.TIER1)
 async def verify_playtest_log(
     evidence: dict[str, Any], context: dict[str, Any]

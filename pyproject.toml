@@ -19,12 +19,14 @@ members = [
     "packages/stepproof-runtime",
     "packages/stepproof-mcp",
     "packages/stepproof-cc-adapter",
+    "packages/stepproof-state",
 ]
 
 [tool.uv.sources]
 stepproof-runtime = { workspace = true }
 stepproof-mcp = { workspace = true }
 stepproof-cc-adapter = { workspace = true }
+stepproof-state = { workspace = true }
 
 [dependency-groups]
 dev = [

@@ -74,6 +74,8 @@ Verification happens in three tiers to keep cost predictable:
 - [Keep Me Honest](docs/KEEP_ME_HONEST.md) — agent-declared plans as first-class runbooks
 - [Open Questions](docs/OPEN_QUESTIONS.md) — the three hardest seams, worked through honestly
 - [Adapter Bridge](docs/ADAPTER_BRIDGE.md) — how Claude Code hooks talk to StepProof
+- [Runtime Handshake](docs/RUNTIME_HANDSHAKE.md) — the `.stepproof/` state contract shared by MCP, hook, and CLI
+- [Verification Matrix](docs/VERIFICATION_MATRIX.md) — four levels of testing (unit → integration → e2e smoke → real Claude Code); what each proves and doesn't
 - [OWASP Agentic AI Top 10 Mapping](docs/OWASP_MAPPING.md) — StepProof's coverage of each risk category
 - [Positioning vs Microsoft AGT](docs/POSITIONING.md) — where we overlap, where we differ, what to consume
 
