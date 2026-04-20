@@ -269,6 +269,109 @@ async def verify_env_isolation(
     }
 
 
+@register("verify_file_exists", Tier.TIER1)
+async def verify_file_exists(evidence: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    """Verify a file exists on disk with a minimum line count.
+
+    Real evidence for design docs, specs, changelogs — can't be faked by
+    submitting a string. Used by the stepproof-test validation runbook.
+    """
+    from pathlib import Path
+
+    path = evidence.get("path")
+    min_lines = int(evidence.get("min_lines", 1))
+    if not path:
+        return {"status": "fail", "reason": "Missing 'path' in evidence."}
+    p = Path(path).expanduser()
+    if not p.exists():
+        return {"status": "fail", "reason": f"File does not exist: {path}"}
+    if not p.is_file():
+        return {"status": "fail", "reason": f"Path is not a file: {path}"}
+    try:
+        lines = [ln for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    except Exception as e:
+        return {"status": "fail", "reason": f"Could not read file: {e}"}
+    if len(lines) < min_lines:
+        return {
+            "status": "fail",
+            "reason": f"{path} has {len(lines)} non-empty lines; need ≥ {min_lines}.",
+            "artifacts": {"lines": len(lines), "required": min_lines},
+        }
+    return {
+        "status": "pass",
+        "reason": f"{path} exists with {len(lines)} non-empty lines.",
+        "artifacts": {"lines": len(lines), "path": path},
+    }
+
+
+@register("verify_playtest_log", Tier.TIER1)
+async def verify_playtest_log(
+    evidence: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    """Verify a playtest log is a real JSONL file with required entries.
+
+    The classic 'I playtested it' claim is hard to check with LLM-based
+    verification but trivial with a deterministic script: the log must exist,
+    must be valid JSONL, and must contain at least min_entries entries.
+    Each entry is checked for a 'move' or 'guess' field so that an empty
+    {} list doesn't pass trivially.
+    """
+    from pathlib import Path
+
+    path = evidence.get("playtest_log_path")
+    min_entries = int(evidence.get("min_entries", 1))
+    if not path:
+        return {"status": "fail", "reason": "Missing 'playtest_log_path' in evidence."}
+    p = Path(path).expanduser()
+    if not p.exists():
+        return {"status": "fail", "reason": f"Playtest log not found: {path}"}
+    try:
+        import json as _json
+
+        entries: list[dict] = []
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = _json.loads(line)
+                if isinstance(obj, dict):
+                    entries.append(obj)
+            except _json.JSONDecodeError:
+                return {
+                    "status": "fail",
+                    "reason": f"Playtest log has invalid JSONL line: {line[:100]!r}",
+                }
+    except Exception as e:
+        return {"status": "fail", "reason": f"Could not read playtest log: {e}"}
+
+    if len(entries) < min_entries:
+        return {
+            "status": "fail",
+            "reason": f"Playtest log has {len(entries)} entries; need ≥ {min_entries}.",
+            "artifacts": {"entries": len(entries), "required": min_entries},
+        }
+    # Substantive-content check: each entry should carry at least one of these
+    # gameplay keys. Prevents someone submitting a log of `{"_": 1}` lines.
+    substantive_keys = {"move", "guess", "action", "input", "step", "turn", "event"}
+    substantive = sum(1 for e in entries if any(k in e for k in substantive_keys))
+    if substantive < min_entries:
+        return {
+            "status": "fail",
+            "reason": (
+                f"Playtest log has {len(entries)} entries but only {substantive} "
+                f"carry gameplay data (need move/guess/action/input/step/turn/event). "
+                "Submitting empty stubs doesn't count."
+            ),
+            "artifacts": {"entries": len(entries), "substantive": substantive},
+        }
+    return {
+        "status": "pass",
+        "reason": f"Playtest log has {len(entries)} entries, {substantive} with gameplay data.",
+        "artifacts": {"entries": len(entries), "substantive": substantive, "path": path},
+    }
+
+
 @register("verify_pr_approved", Tier.TIER1)
 async def verify_pr_approved(evidence: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     pr_url = evidence.get("pr_url")
