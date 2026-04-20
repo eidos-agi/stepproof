@@ -141,8 +141,53 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
-    print("stepproof install: wiring Claude Code adapter is Phase 2 work.")
-    print("See docs/ADAPTER_BRIDGE.md for the design.")
+    """Install the cc-adapter: hook scripts, subagents, slash commands, settings.json."""
+    try:
+        from stepproof_cc_adapter.installer import install as _install
+    except ImportError:
+        print(
+            "stepproof-cc-adapter package not installed; run `uv sync --all-packages` first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    from pathlib import Path
+
+    scope = args.scope
+    project_dir = Path(args.project_dir).resolve() if args.project_dir else None
+    manifest = _install(scope=scope, project_dir=project_dir)
+    print(f"StepProof Claude Code adapter installed ({scope}).")
+    print(f"  base_dir: {manifest.base_dir}")
+    print(f"  hooks registered: {', '.join(manifest.hook_events_registered)}")
+    print(f"  files written: {len(manifest.files_written)}")
+    print(
+        f"  manifest: {(project_dir or Path.cwd()).resolve()}/"
+        ".stepproof/adapter-manifest.json"
+    )
+    print("\nNext: restart Claude Code so settings.json and hooks reload.")
+    return 0
+
+
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    """Reverse a prior install using the project's adapter-manifest.json."""
+    try:
+        from stepproof_cc_adapter.installer import uninstall as _uninstall
+    except ImportError:
+        print("stepproof-cc-adapter package not installed.", file=sys.stderr)
+        return 1
+
+    from pathlib import Path
+
+    project_dir = Path(args.project_dir).resolve() if args.project_dir else None
+    try:
+        summary = _uninstall(project_dir=project_dir)
+    except FileNotFoundError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    print("StepProof Claude Code adapter uninstalled.")
+    print(f"  scope: {summary['scope']}")
+    print(f"  files removed: {len(summary['files_removed'])}")
+    print(f"  events unregistered: {', '.join(summary['events_unregistered']) or 'none'}")
     return 0
 
 
@@ -325,8 +370,15 @@ def build_parser() -> argparse.ArgumentParser:
     paudit.add_argument("--run-id")
     paudit.set_defaults(func=cmd_audit)
 
-    pinst = sub.add_parser("install", help="Wire StepProof into a Claude Code project")
+    pinst = sub.add_parser("install", help="Wire StepProof into Claude Code")
+    pinst.add_argument("--scope", choices=["user", "project"], default="user",
+                       help="user (~/.claude/) or project (<cwd>/.claude/). Default: user.")
+    pinst.add_argument("--project-dir", help="Where to write the adapter-manifest.json (default: cwd).")
     pinst.set_defaults(func=cmd_install)
+
+    puninst = sub.add_parser("uninstall", help="Reverse a prior install using the manifest")
+    puninst.add_argument("--project-dir", help="Where to find adapter-manifest.json (default: cwd).")
+    puninst.set_defaults(func=cmd_uninstall)
 
     pinit = sub.add_parser("init", help="Initialize .stepproof/ in a project")
     pinit.add_argument("path", nargs="?", default=".")
