@@ -19,6 +19,7 @@ from .models import (
     Decision,
     Heartbeat,
     LivenessStatus,
+    PlanDeclaration,
     PolicyDecision,
     PolicyInput,
     RunStatus,
@@ -28,6 +29,7 @@ from .models import (
     WorkflowRun,
     utcnow,
 )
+from .plan_validator import validate_plan
 from .policy import PolicyEngine, classify_ring, structural_gate
 
 
@@ -169,6 +171,13 @@ class HeartbeatRequest(BaseModel):
     ttl_seconds: int = 300
 
 
+class PlanRejected(BaseModel):
+    """422 body when a declared plan fails validation."""
+
+    errors: list[dict[str, Any]]
+    message: str = "Plan rejected by StepProof structural validation."
+
+
 # --- Endpoints ---
 
 
@@ -240,6 +249,114 @@ async def run_start(req: RunStartRequest) -> WorkflowRun:
         )
         await conn.commit()
     return run
+
+
+@app.post("/plans/declare")
+async def plan_declare(plan: PlanDeclaration) -> dict[str, Any]:
+    """Accept an agent-declared plan ("keep me honest"), validate structurally,
+    register it as a runbook template, and create a WorkflowRun against it.
+    """
+    # 1. Validate.
+    errors = validate_plan(plan)
+    if errors:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Plan rejected by StepProof structural validation.",
+                "errors": [e.model_dump(exclude_none=True) for e in errors],
+            },
+        )
+
+    # 2. Derive a stable template_id for the declared plan.
+    plan_payload = json.dumps(plan.model_dump(mode="json"), sort_keys=True)
+    plan_hash = hashlib.sha256(plan_payload.encode()).hexdigest()[:12]
+    template_id = f"rb-declared-{plan_hash}"
+
+    # 3. Persist as a runbook_template with source='declared'.
+    async with connect() as conn:
+        await conn.execute(
+            """
+            INSERT INTO runbook_templates
+              (template_id, version, name, description, risk_level,
+               allowed_environments, requires_human_signoff, shadow, source,
+               steps, source_path, intent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(template_id) DO UPDATE SET
+              intent = excluded.intent
+            """,
+            (
+                template_id,
+                "1.0.0",
+                f"Declared: {plan.intent[:60]}",
+                plan.intent,
+                plan.risk_level,
+                json.dumps([plan.environment]),
+                0,
+                0,
+                "declared",
+                json.dumps([s.model_dump(mode="json") for s in plan.steps]),
+                None,
+                plan.intent,
+            ),
+        )
+
+        # 4. Create the run — same shape as /runs.
+        run = WorkflowRun(
+            template_id=template_id,
+            template_version="1.0.0",
+            owner_id=plan.owner_id,
+            agent_id=plan.agent_id,
+            environment=plan.environment,
+            current_step=plan.steps[0].step_id,
+        )
+        await conn.execute(
+            """
+            INSERT INTO workflow_runs
+              (run_id, template_id, template_version, owner_id, agent_id,
+               environment, current_step, status, started_at, ended_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(run.run_id),
+                run.template_id,
+                run.template_version,
+                run.owner_id,
+                run.agent_id,
+                run.environment,
+                run.current_step,
+                run.status.value,
+                run.started_at.isoformat(),
+                None,
+            ),
+        )
+        for step in plan.steps:
+            await conn.execute(
+                """INSERT INTO step_runs (run_id, step_id, status, evidence, attempts)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (str(run.run_id), step.step_id, StepStatus.PENDING.value, "{}", 0),
+            )
+        await _record_audit(
+            conn,
+            AuditEvent(
+                actor_type="worker_agent",
+                actor_id=plan.agent_id,
+                human_owner_id=plan.owner_id,
+                run_id=run.run_id,
+                action_type="plan.declared",
+                decision=Decision.ALLOW,
+                policy_id="system.plan_declared",
+                reason=f"Declared plan: {plan.intent[:200]}",
+                payload_hash=plan_hash,
+            ),
+        )
+        await conn.commit()
+
+    return {
+        "run": run.model_dump(mode="json"),
+        "template_id": template_id,
+        "plan_hash": plan_hash,
+        "steps": len(plan.steps),
+    }
 
 
 @app.get("/runs/{run_id}")

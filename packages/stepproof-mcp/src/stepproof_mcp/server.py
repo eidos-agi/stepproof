@@ -164,6 +164,65 @@ async def stepproof_runbook_get(template_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
+async def stepproof_keep_me_honest(
+    intent: str,
+    steps: list[dict[str, Any]],
+    environment: str = "staging",
+    owner_id: str = "unknown",
+    agent_id: str = "claude-code-worker",
+    risk_level: str = "medium",
+) -> dict[str, Any]:
+    """Declare a plan inline and bind yourself to it.
+
+    This is the primary StepProof mode. You submit a list of steps you intend to
+    execute. Each step must declare:
+      - step_id (stable identifier within this plan)
+      - description (what this step does)
+      - required_evidence (list of keys you'll submit at completion — concrete
+        IDs/hashes, NOT free-text "done")
+      - verification_method (must reference a registered Tier 1 verifier)
+      - allowed_tools (tools permitted during this step)
+
+    StepProof validates the plan structurally at submission. If it passes, the
+    plan becomes your contract for this session — you cannot deviate without
+    explicit amendment. Raw Bash, unsanctioned writes, and out-of-sequence
+    steps will be denied at the enforcement gate.
+
+    Example steps argument:
+      [
+        {"step_id": "s1", "description": "Open PR",
+         "required_evidence": ["branch_name", "pr_url"],
+         "verification_method": "verify_pr_opened",
+         "allowed_tools": ["Edit", "git"]},
+        {"step_id": "s2", "description": "Tests green",
+         "required_evidence": ["ci_run_id"],
+         "verification_method": "verify_ci_green",
+         "allowed_tools": ["ci_cli"]},
+      ]
+
+    Call stepproof_runbook_list + stepproof_runbook_get to see registered
+    verification methods and example plan shapes.
+    """
+    async with (await _client()) as c:
+        r = await c.post(
+            "/plans/declare",
+            json={
+                "intent": intent,
+                "steps": steps,
+                "environment": environment,
+                "owner_id": owner_id,
+                "agent_id": agent_id,
+                "risk_level": risk_level,
+            },
+        )
+        if r.status_code == 422:
+            # Return the structured validation errors so the agent can fix them.
+            return {"status": "rejected", **r.json().get("detail", {})}
+        r.raise_for_status()
+        return {"status": "accepted", **r.json()}
+
+
+@mcp.tool()
 async def stepproof_heartbeat(run_id: str, ttl_seconds: int = 300) -> dict[str, Any]:
     """Register or refresh liveness for an active run. Without heartbeat the run
     will transition to suspended and then expired per ADR-0003."""

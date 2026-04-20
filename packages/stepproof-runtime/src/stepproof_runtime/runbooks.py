@@ -90,6 +90,11 @@ async def get_template(template_id: str) -> RunbookTemplate | None:
 
 
 def _row_to_template(row) -> RunbookTemplate:
+    # Defensive column access — `source` may be absent on pre-migration DBs.
+    try:
+        source = row["source"] or "template"
+    except (KeyError, IndexError):
+        source = "template"
     return RunbookTemplate.model_validate(
         {
             "template_id": row["template_id"],
@@ -100,6 +105,7 @@ def _row_to_template(row) -> RunbookTemplate:
             "allowed_environments": json.loads(row["allowed_environments"]),
             "requires_human_signoff": bool(row["requires_human_signoff"]),
             "shadow": bool(row["shadow"]),
+            "source": source,
             "steps": json.loads(row["steps"]),
         }
     )

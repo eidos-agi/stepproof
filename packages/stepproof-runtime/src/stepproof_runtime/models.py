@@ -57,7 +57,31 @@ class RunbookTemplate(BaseModel):
     allowed_environments: list[str] = Field(default_factory=lambda: ["staging", "production"])
     requires_human_signoff: bool = False
     shadow: bool = False
+    source: Literal["template", "declared"] = "template"
     steps: list[StepTemplate]
+
+
+class PlanDeclaration(BaseModel):
+    """An agent-declared plan submitted via `keep_me_honest`.
+
+    Per docs/KEEP_ME_HONEST.md, the agent authors its own runbook inline.
+    The plan is validated structurally at submission, then becomes the
+    agent's contract for the session.
+    """
+
+    intent: str = Field(..., description="Plain-English goal; logged in the audit trail")
+    steps: list[StepTemplate]
+    environment: str = "staging"
+    owner_id: str = "unknown"
+    agent_id: str = "unknown"
+    risk_level: Literal["low", "medium", "high", "critical"] = "medium"
+
+
+class PlanValidationError(BaseModel):
+    step_id: str | None = None
+    field: str | None = None
+    code: str
+    message: str
 
 
 class RunStatus(str, Enum):

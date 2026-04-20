@@ -18,8 +18,10 @@ CREATE TABLE IF NOT EXISTS runbook_templates (
     allowed_environments TEXT NOT NULL,   -- JSON array
     requires_human_signoff INTEGER NOT NULL DEFAULT 0,
     shadow INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'template',  -- 'template' | 'declared'
     steps TEXT NOT NULL,                   -- JSON array of StepTemplate
-    source_path TEXT                        -- File path if loaded from YAML
+    source_path TEXT,                        -- File path if loaded from YAML
+    intent TEXT                               -- Declared-plan intent (NULL for templates)
 );
 
 CREATE TABLE IF NOT EXISTS workflow_runs (
@@ -88,10 +90,19 @@ def db_path() -> str:
 
 
 async def init_db(path: str | None = None) -> None:
-    """Create tables idempotently."""
+    """Create tables idempotently and apply small in-place migrations."""
     path = path or db_path()
     async with aiosqlite.connect(path) as conn:
         await conn.executescript(SCHEMA_SQL)
+        # Idempotent column migrations for pre-existing databases.
+        for stmt in (
+            "ALTER TABLE runbook_templates ADD COLUMN source TEXT NOT NULL DEFAULT 'template'",
+            "ALTER TABLE runbook_templates ADD COLUMN intent TEXT",
+        ):
+            try:
+                await conn.execute(stmt)
+            except Exception:
+                pass  # Column already exists; ALTER is idempotent-by-try.
         await conn.commit()
 
 
