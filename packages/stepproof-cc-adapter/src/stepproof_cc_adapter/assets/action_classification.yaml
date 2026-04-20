@@ -1,0 +1,127 @@
+# StepProof client-side action classification for Claude Code.
+#
+# Maps Claude Code tool calls into (action_type, ring) so the PreToolUse hook
+# can short-circuit Ring 0 (read-only), consult the daemon for Ring 1+, and
+# deny known-bad patterns locally (.env writes, dangerous rm).
+#
+# Rings per ADR-0002:
+#   0 — sandbox/read-only, always allowed
+#   1 — reversible non-prod writes, runbook required
+#   2 — non-reversible non-prod, runbook + verifier gate
+#   3 — production-facing, runbook + verifier + trust + (maybe) approval
+
+version: 1
+
+# Direct tool classifications. Exact match on tool_name.
+tools:
+  Read:         { action_type: tool.read,          ring: 0 }
+  Glob:         { action_type: tool.glob,          ring: 0 }
+  Grep:         { action_type: tool.grep,          ring: 0 }
+  LS:           { action_type: tool.ls,            ring: 0 }
+  NotebookRead: { action_type: tool.read_notebook, ring: 0 }
+  WebFetch:     { action_type: tool.web_fetch,     ring: 0 }
+  WebSearch:    { action_type: tool.web_search,    ring: 0 }
+  TodoWrite:    { action_type: tool.todo,          ring: 0 }
+  Write:        { action_type: filesystem.write,   ring: 1 }
+  Edit:         { action_type: filesystem.write,   ring: 1 }
+  NotebookEdit: { action_type: filesystem.write,   ring: 1 }
+  Bash:         { action_type: shell.exec,         ring: 3 }   # conservative default; patterns below demote
+
+# Bash command patterns — first match wins. Promote/demote from the default Ring 3.
+# Order matters: most specific first, most generic last.
+bash_patterns:
+  # Strictly read-only system commands — demote to Ring 0.
+  # Note: `env` is deliberately excluded. `env` alone lists vars (read-only),
+  # but `env VAR=x command` is a command wrapper that must be classified by
+  # the wrapped command, not by `env` itself.
+  - match: '^(ls|pwd|echo|cat|head|tail|wc|which|whereis|type|file|stat|date|uname)\b'
+    action_type: shell.read
+    ring: 0
+  - match: '^git\s+(status|log|diff|show|branch|tag|remote|blame|rev-parse|config\s+--get)\b'
+    action_type: shell.read
+    ring: 0
+  - match: '^(npm|pip|uv|bun|yarn)\s+(list|ls|show|view|outdated|tree|freeze|--version)\b'
+    action_type: shell.read
+    ring: 0
+
+  # Prefix patterns allow common benign wrappers to not hide the real command.
+  # `(?:sudo\s+)?` optional sudo; `(?:env\s+\w+=\S+\s+)*` zero-or-more env vars;
+  # `(?:command\s+)?` shell `command` builtin; `(?:/[\w./-]+/)?` absolute path prefix;
+  # `\\?` allows backslash-escape evasion.
+  # Sanctioned migration/deploy tools — production variant MUST match first.
+  - match: '^(?:sudo\s+)?(?:env\s+\w+=\S*\s+)*(?:command\s+)?\\?(?:/[\w./-]+/)?cerebro-migrate-production\b'
+    action_type: database.write
+    ring: 3
+  - match: '^(?:sudo\s+)?(?:env\s+\w+=\S*\s+)*(?:command\s+)?\\?(?:/[\w./-]+/)?cerebro-migrate(-staging)?\b'
+    action_type: database.write
+    ring: 2
+
+  # Raw DB access — Ring 2 by default, Ring 3 against production. Matches
+  # `sudo psql`, `/usr/bin/psql`, `env PGPASSWORD=x psql`, `command psql`.
+  - match: '^(?:sudo\s+)?(?:env\s+\w+=\S*\s+)*(?:command\s+)?\\?(?:/[\w./-]+/)?(psql|pg_dump|pg_restore|mysql|mongo|redis-cli)\b'
+    action_type: database.write
+    ring: 2
+    env_overrides:
+      production: { ring: 3 }
+
+  # Deploy/infra CLIs — Ring 3. Same wrapper-tolerant prefix.
+  - match: '^(?:sudo\s+)?(?:env\s+\w+=\S*\s+)*(?:command\s+)?\\?(?:/[\w./-]+/)?(railway\s+deploy|railway\s+run|railguey\s+deploy|flyctl\s+deploy|gcloud|aws|kubectl|terraform\s+(apply|destroy|import))\b'
+    action_type: deploy.production
+    ring: 3
+
+  # Package installs — Ring 1 (mutates local env but reversible).
+  - match: '^(?:sudo\s+)?(?:env\s+\w+=\S*\s+)*(?:command\s+)?\\?(?:/[\w./-]+/)?(npm|pip|uv|bun|yarn)\s+(install|add|i\b)'
+    action_type: package.install
+    ring: 1
+
+  # rm -rf is never OK; deny regardless of ring. Handles `rm -rf --`, multiple
+  # separate flags, ordering variants, and absolute paths.
+  - match: '\brm\b(?:\s+-[a-zA-Z]*[rRfF][a-zA-Z]*)+(?:\s+--)?\s+(/|~|\$HOME|\.\.)'
+    action_type: filesystem.destroy
+    ring: 3
+    deny: true
+    deny_reason: "rm -rf of root-ish path blocked by client-side policy."
+  # Cover `rm -r -f /` (separated flags) where each flag is its own arg.
+  - match: '\brm\b(?:\s+-[a-zA-Z]+){2,}(?:\s+--)?\s+(/|~|\$HOME|\.\.)'
+    action_type: filesystem.destroy
+    ring: 3
+    deny: true
+    deny_reason: "rm -r -f of root-ish path blocked by client-side policy."
+
+# Path-based classification for Write/Edit. First match wins within the tool.
+# Paths are matched with glob semantics against tool_input.file_path (or equivalent).
+path_classifications:
+  # Secret files — never a valid write target for an agent.
+  - glob: '**/.env'
+    ring: 3
+    deny: true
+    deny_reason: ".env files are never a valid write target for an agent."
+  - glob: '**/.env.*'
+    deny: false  # .env.sample / .env.example are OK
+    when_not_glob: ['**/.env.sample', '**/.env.example', '**/.env.template']
+    ring: 3
+    deny: true
+    deny_reason: "Non-sample .env files are never valid write targets for an agent."
+
+  # Migrations — Ring 2.
+  - glob: 'migrations/**/*.sql'
+    action_type: database.migration
+    ring: 2
+  - glob: 'supabase/migrations/**/*.sql'
+    action_type: database.migration
+    ring: 2
+
+  # Docs are safe Ring 1.
+  - glob: 'docs/**/*.md'
+    ring: 1
+
+# MCP tool classifications — prefix match on tool_name.
+mcp_tools:
+  "mcp__stepproof__.*":       { action_type: stepproof.meta,     ring: 0 }
+  "mcp__github__.*read.*":    { action_type: github.read,        ring: 0 }
+  "mcp__github__search_.*":   { action_type: github.read,        ring: 0 }
+  "mcp__github__list_.*":     { action_type: github.read,        ring: 0 }
+  "mcp__github__merge_pull_request": { action_type: github.merge, ring: 2 }
+  "mcp__github__create_pull_request": { action_type: github.pr,  ring: 1 }
+  "mcp__railguey__.*deploy.*":  { action_type: deploy.production, ring: 3 }
+  "mcp__railguey__.*rollback.*": { action_type: deploy.rollback,  ring: 3 }

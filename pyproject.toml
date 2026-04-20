@@ -18,11 +18,13 @@ bypass-selection = true
 members = [
     "packages/stepproof-runtime",
     "packages/stepproof-mcp",
+    "packages/stepproof-cc-adapter",
 ]
 
 [tool.uv.sources]
 stepproof-runtime = { workspace = true }
 stepproof-mcp = { workspace = true }
+stepproof-cc-adapter = { workspace = true }
 
 [dependency-groups]
 dev = [
