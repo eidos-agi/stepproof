@@ -51,3 +51,4 @@ secrets/
 .stepproof/adapter-manifest.json
 .stepproof/runtime.db
 .stepproof/runtime.db-*
+.stepproof.pre-init-backup/
