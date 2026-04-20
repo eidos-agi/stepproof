@@ -1,0 +1,42 @@
+# ETL data backfill runbook. Runs a backfill job, verifies row counts match,
+# updates downstream aggregates. Classic observed-session-style silent-null-violation
+# territory — the row-count verifier is non-negotiable.
+
+template_id: rb-data-backfill
+version: 1.0.0
+name: ETL data backfill with row-count verification
+description: >
+  Trigger a backfill job for a specific vendor/table, wait for completion,
+  verify extracted vs loaded row counts match, then run downstream
+  gold-layer aggregations.
+risk_level: medium
+allowed_environments: [staging, production]
+
+steps:
+  - step_id: s1
+    description: Enqueue backfill job
+    allowed_tools: [data_daemon_api]
+    required_evidence: [job_id, vendor, table]
+    verification_method: verify_pr_opened  # stub — a job_id is our "PR"
+    verification_tier: tier1
+    timeout_seconds: 300
+    on_fail: retry
+    on_fail_max_retries: 2
+
+  - step_id: s2
+    description: Wait for extraction + loading to complete, verify row counts
+    allowed_tools: [data_daemon_api, log_reader]
+    required_evidence: [rows_extracted, rows_loaded]
+    verification_method: verify_row_counts_match
+    verification_tier: tier1
+    timeout_seconds: 7200
+    on_fail: escalate_human
+
+  - step_id: s3
+    description: Rebuild downstream gold-layer aggregations
+    allowed_tools: [cerebro_migrate_staging, data_daemon_api]
+    required_evidence: [deploy_id, rows_extracted, rows_loaded]
+    verification_method: verify_row_counts_match
+    verification_tier: tier1
+    timeout_seconds: 3600
+    on_fail: escalate_human

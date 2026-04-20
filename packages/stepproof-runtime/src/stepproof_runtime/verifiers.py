@@ -122,5 +122,168 @@ async def verify_deploy_and_health(
     return {"status": "fail", "reason": "Missing deploy_id."}
 
 
+@register("verify_tests_green", Tier.TIER1)
+async def verify_tests_green(evidence: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    test_run_id = evidence.get("test_run_id")
+    if test_run_id and not str(test_run_id).startswith("fail"):
+        return {
+            "status": "pass",
+            "reason": f"Test run {test_run_id} reported all tests green.",
+            "artifacts": {"test_run_id": test_run_id},
+        }
+    return {"status": "fail", "reason": f"Test run missing or failing: {test_run_id}"}
+
+
+@register("verify_rollback_succeeded", Tier.TIER1)
+async def verify_rollback_succeeded(
+    evidence: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    rollback_deploy_id = evidence.get("rollback_deploy_id")
+    prior_deploy_id = evidence.get("prior_deploy_id")
+    if rollback_deploy_id and prior_deploy_id:
+        return {
+            "status": "pass",
+            "reason": f"Rollback {rollback_deploy_id} restored prior version {prior_deploy_id}.",
+        }
+    return {"status": "fail", "reason": "Missing rollback_deploy_id or prior_deploy_id."}
+
+
+@register("verify_secret_rotated", Tier.TIER1)
+async def verify_secret_rotated(
+    evidence: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    secret_id = evidence.get("secret_id")
+    new_version = evidence.get("new_version")
+    old_invalidated = evidence.get("old_invalidated") is True
+    if secret_id and new_version and old_invalidated:
+        return {
+            "status": "pass",
+            "reason": f"Secret {secret_id} rotated to v{new_version}; prior version invalidated.",
+        }
+    return {
+        "status": "fail",
+        "reason": "Missing secret_id, new_version, or old_invalidated=true.",
+    }
+
+
+@register("verify_row_counts_match", Tier.TIER1)
+async def verify_row_counts_match(
+    evidence: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    """silent-null-violation incident — verify rows_loaded == rows_extracted per table."""
+    extracted = evidence.get("rows_extracted")
+    loaded = evidence.get("rows_loaded")
+    if extracted is None or loaded is None:
+        return {"status": "fail", "reason": "Missing rows_extracted or rows_loaded."}
+    try:
+        e, l = int(extracted), int(loaded)
+    except (TypeError, ValueError):
+        return {"status": "fail", "reason": "rows_extracted/loaded must be integers."}
+    if e > 0 and e == l:
+        return {
+            "status": "pass",
+            "reason": f"Row counts match: {l} loaded == {e} extracted.",
+            "artifacts": {"rows_extracted": e, "rows_loaded": l},
+        }
+    return {
+        "status": "fail",
+        "reason": f"Row count mismatch: {l} loaded vs {e} extracted (observed-session-style silent null violation).",
+        "artifacts": {"rows_extracted": e, "rows_loaded": l},
+    }
+
+
+@register("verify_single_active_deployment", Tier.TIER1)
+async def verify_single_active_deployment(
+    evidence: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    """zombie-container incident — zombie container detection."""
+    active_count = evidence.get("active_deployment_count")
+    deploy_id = evidence.get("deploy_id")
+    if active_count is None or deploy_id is None:
+        return {"status": "fail", "reason": "Missing active_deployment_count or deploy_id."}
+    try:
+        n = int(active_count)
+    except (TypeError, ValueError):
+        return {"status": "fail", "reason": "active_deployment_count must be an integer."}
+    if n == 1:
+        return {
+            "status": "pass",
+            "reason": f"Single active deployment {deploy_id}; no zombies detected.",
+        }
+    return {
+        "status": "fail",
+        "reason": f"{n} active deployments detected; zombie risk (observed-session-style).",
+    }
+
+
+@register("verify_connector_registry", Tier.TIER1)
+async def verify_connector_registry(
+    evidence: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    """docker-cache-persistence incident — verify the deployed code contains the expected connector."""
+    expected = evidence.get("expected_connector")
+    registry = evidence.get("connector_registry")  # e.g., ["sage_intacct", "fleetio"]
+    if not expected or registry is None:
+        return {
+            "status": "fail",
+            "reason": "Missing expected_connector or connector_registry.",
+        }
+    registry_list = registry if isinstance(registry, list) else [registry]
+    if expected in registry_list:
+        return {
+            "status": "pass",
+            "reason": f"Connector {expected!r} present in deployed registry {registry_list}.",
+        }
+    return {
+        "status": "fail",
+        "reason": (
+            f"Connector {expected!r} missing from deployed registry {registry_list} "
+            "(observed-session-style Docker cache persistence)."
+        ),
+    }
+
+
+@register("verify_env_isolation", Tier.TIER1)
+async def verify_env_isolation(
+    evidence: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    """env-cross-wiring incident — environment cross-wiring detection."""
+    declared_env = evidence.get("declared_env")  # "staging" or "production"
+    database_url_env = evidence.get("database_url_env")  # resolves to same
+    if not declared_env or not database_url_env:
+        return {
+            "status": "fail",
+            "reason": "Missing declared_env or database_url_env.",
+        }
+    if declared_env == database_url_env:
+        return {
+            "status": "pass",
+            "reason": f"Environment isolated: {declared_env} wiring matches topology.",
+        }
+    return {
+        "status": "fail",
+        "reason": (
+            f"Environment cross-wiring: declared={declared_env} but DATABASE_URL resolves "
+            f"to {database_url_env} (env-cross-wiring incident)."
+        ),
+    }
+
+
+@register("verify_pr_approved", Tier.TIER1)
+async def verify_pr_approved(evidence: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    pr_url = evidence.get("pr_url")
+    approval_count = evidence.get("approval_count", 0)
+    try:
+        n = int(approval_count)
+    except (TypeError, ValueError):
+        n = 0
+    if pr_url and n >= 1:
+        return {
+            "status": "pass",
+            "reason": f"PR {pr_url} has {n} approval(s).",
+        }
+    return {"status": "fail", "reason": f"PR {pr_url} lacks required approval (have {n}, need ≥1)."}
+
+
 def list_methods() -> list[str]:
     return sorted(_REGISTRY.keys())

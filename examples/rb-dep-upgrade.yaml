@@ -1,0 +1,41 @@
+# Dependency upgrade runbook. Bump a library, run tests, merge if green.
+# Low-risk code-change template — the kind of thing an agent does routinely.
+
+template_id: rb-dep-upgrade
+version: 1.0.0
+name: Safe dependency upgrade
+description: >
+  Upgrade a single dependency, regenerate lockfile, confirm tests pass,
+  merge. Catches accidental breaking upgrades by requiring test_run_id
+  evidence — not the agent's self-report.
+risk_level: low
+allowed_environments: [staging, production]
+
+steps:
+  - step_id: s1
+    description: Bump dependency version and commit lockfile changes
+    allowed_tools: [Edit, Write, git]
+    required_evidence: [branch_name, pr_url]
+    verification_method: verify_pr_opened
+    verification_tier: tier1
+    timeout_seconds: 1800
+    on_fail: retry
+    on_fail_max_retries: 2
+
+  - step_id: s2
+    description: Full test suite green on the upgrade branch
+    allowed_tools: [ci_cli]
+    required_evidence: [test_run_id]
+    verification_method: verify_tests_green
+    verification_tier: tier1
+    timeout_seconds: 2400
+    on_fail: block
+
+  - step_id: s3
+    description: Merge the upgrade
+    allowed_tools: [mcp__github__merge_pull_request]
+    required_evidence: [pr_url, ci_run_id]
+    verification_method: verify_ci_green
+    verification_tier: tier1
+    timeout_seconds: 600
+    on_fail: block

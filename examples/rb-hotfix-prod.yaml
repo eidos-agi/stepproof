@@ -1,0 +1,61 @@
+# Emergency hotfix runbook. Ring 3 throughout — every step is production-facing.
+# Compressed from the standard deploy to minimize time-to-recovery while still
+# requiring verification gates and human sign-off.
+
+template_id: rb-hotfix-prod
+version: 1.0.0
+name: Emergency production hotfix
+description: >
+  Ship a minimal, targeted fix directly to production with compressed verification.
+  Requires human sign-off at plan start AND before deploy. Verifier checks CI green,
+  smoke tests post-deploy, and single-active-deployment to prevent zombies.
+risk_level: critical
+allowed_environments: [production]
+requires_human_signoff: true
+
+steps:
+  - step_id: s1
+    description: Implement hotfix in a named hotfix branch
+    allowed_tools: [Edit, Write, git]
+    required_evidence: [branch_name, pr_url]
+    verification_method: verify_pr_opened
+    verification_tier: tier1
+    timeout_seconds: 1800
+    on_fail: retry
+    on_fail_max_retries: 2
+
+  - step_id: s2
+    description: Minimum viable test suite passes (smoke only, not full)
+    allowed_tools: [ci_cli]
+    required_evidence: [ci_run_id]
+    verification_method: verify_ci_green
+    verification_tier: tier1
+    timeout_seconds: 900
+    on_fail: block
+
+  - step_id: s3
+    description: Incident-commander approval
+    allowed_tools: [mcp__github__add_issue_comment]
+    required_evidence: [pr_url, approval_count]
+    verification_method: verify_pr_approved
+    verification_tier: tier1
+    timeout_seconds: 1800
+    on_fail: escalate_human
+
+  - step_id: s4
+    description: Deploy hotfix to production
+    allowed_tools: [mcp__github__merge_pull_request, deploy_cli]
+    required_evidence: [deploy_id, declared_env, database_url_env]
+    verification_method: verify_env_isolation
+    verification_tier: tier1
+    timeout_seconds: 600
+    on_fail: escalate_human
+
+  - step_id: s5
+    description: Verify single active deployment and health
+    allowed_tools: [railguey_deployments, http_probe]
+    required_evidence: [active_deployment_count, deploy_id]
+    verification_method: verify_single_active_deployment
+    verification_tier: tier1
+    timeout_seconds: 300
+    on_fail: escalate_human

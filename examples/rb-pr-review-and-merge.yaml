@@ -1,0 +1,49 @@
+# Standard PR lifecycle: open, tests, review, merge. Ring 1 throughout.
+# The everyday code-change flow; no runbook for routine work in the limit,
+# but this shape exists as a template that agents can bind to for higher
+# reliability on larger PRs.
+
+template_id: rb-pr-review-and-merge
+version: 1.0.0
+name: PR review and merge
+description: Open PR, pass tests, obtain approval, merge.
+risk_level: low
+allowed_environments: [staging, production]
+
+steps:
+  - step_id: s1
+    description: Implement change and open PR
+    allowed_tools: [Edit, Write, git, mcp__github__create_pull_request]
+    required_evidence: [branch_name, pr_url]
+    verification_method: verify_pr_opened
+    verification_tier: tier1
+    timeout_seconds: 7200
+    on_fail: retry
+    on_fail_max_retries: 3
+
+  - step_id: s2
+    description: CI tests green
+    allowed_tools: [ci_cli]
+    required_evidence: [ci_run_id]
+    verification_method: verify_ci_green
+    verification_tier: tier1
+    timeout_seconds: 1800
+    on_fail: block
+
+  - step_id: s3
+    description: PR approved
+    allowed_tools: [mcp__github__add_issue_comment]
+    required_evidence: [pr_url, approval_count]
+    verification_method: verify_pr_approved
+    verification_tier: tier1
+    timeout_seconds: 86400
+    on_fail: block
+
+  - step_id: s4
+    description: Merge PR
+    allowed_tools: [mcp__github__merge_pull_request]
+    required_evidence: [pr_url, ci_run_id]
+    verification_method: verify_ci_green
+    verification_tier: tier1
+    timeout_seconds: 600
+    on_fail: block

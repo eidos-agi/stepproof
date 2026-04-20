@@ -1,0 +1,40 @@
+# Production rollback runbook. Triggered when a deploy breaks production.
+# Ring 3, requires sign-off, measured in minutes not hours.
+
+template_id: rb-rollback-prod
+version: 1.0.0
+name: Production rollback to prior version
+description: >
+  Roll production back to a previously-known-good deploy_id. Verifier
+  confirms the rollback deploy completed and health checks pass.
+risk_level: critical
+allowed_environments: [production]
+requires_human_signoff: true
+
+steps:
+  - step_id: s1
+    description: Incident-commander approval to roll back
+    allowed_tools: [mcp__github__add_issue_comment]
+    required_evidence: [pr_url, approval_count]
+    verification_method: verify_pr_approved
+    verification_tier: tier1
+    timeout_seconds: 900
+    on_fail: escalate_human
+
+  - step_id: s2
+    description: Trigger rollback deploy to prior known-good version
+    allowed_tools: [deploy_cli, railguey_rollback]
+    required_evidence: [rollback_deploy_id, prior_deploy_id]
+    verification_method: verify_rollback_succeeded
+    verification_tier: tier1
+    timeout_seconds: 900
+    on_fail: escalate_human
+
+  - step_id: s3
+    description: Confirm single active deployment post-rollback
+    allowed_tools: [railguey_deployments, http_probe]
+    required_evidence: [active_deployment_count, deploy_id]
+    verification_method: verify_single_active_deployment
+    verification_tier: tier1
+    timeout_seconds: 300
+    on_fail: escalate_human
