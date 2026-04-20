@@ -62,7 +62,13 @@ Verification happens in three tiers to keep cost predictable:
 - [Runbook Model](docs/RUNBOOKS.md) — schema and authoring guide
 - [Policy Engine](docs/POLICY.md) — decision model, hook integration
 - [Verifier Fabric](docs/VERIFIERS.md) — tiers, interface contract
+- [Hook Integration](docs/HOOKS.md) — pseudo-code for `PreToolUse`, `complete_step`, verifier dispatch
+- [Prior Art](docs/PRIOR_ART.md) — what exists already and what StepProof adds
 - [Roadmap](docs/ROADMAP.md) — MVP sequence
+
+## Origin
+
+The founding design discussion and fact-check are preserved in [`chats/`](chats/). Read those before making consequential changes — the *why* is there, not in the conclusion docs.
 
 ---
 
