@@ -64,7 +64,9 @@ Verification happens in three tiers to keep cost predictable:
 - [Verifier Fabric](docs/VERIFIERS.md) — tiers, interface contract
 - [Hook Integration](docs/HOOKS.md) — pseudo-code for `PreToolUse`, `complete_step`, verifier dispatch
 - [Lessons from `claude-code-hooks-mastery`](docs/LESSONS_FROM_HOOKS_MASTERY.md) — idioms, exit-code contract, validator subagent pattern
-- [Prior Art](docs/PRIOR_ART.md) — what exists already and what StepProof adds
+- [Prior Art](docs/PRIOR_ART.md) — catalog of related work
+- [Prior Art — Deeper Dive](docs/PRIOR_ART_DEEPER.md) — per-source extraction with StepProof implications
+- [Architecture Decision Records](docs/adr/) — numbered, dated, immutable decisions
 - [Roadmap](docs/ROADMAP.md) — MVP sequence
 
 ## Origin

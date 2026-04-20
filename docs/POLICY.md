@@ -43,6 +43,21 @@ Possible decisions:
 | `deny` | Block; surface reason and suggested alternative |
 | `transform` | Rewrite the action (e.g., enforce dry-run flag) |
 | `require_approval` | Pause; route to human; resume on approval |
+| `audit` | Log and continue. Pure observability — no enforcement. Used for shadow-mode rules and rules that are too new to enforce. |
+
+### Shadow mode
+
+Policies and runbooks may be marked `shadow: true`. Shadow rules evaluate normally and write full decision records to the audit log, but the `decision` field returned to the adapter is always `allow` regardless of what the rule concluded. This lets operators:
+
+- Author new rules and measure their impact before turning them on.
+- Tune noisy rules into quiet ones by reviewing would-have-blocked events.
+- Promote rules from `shadow: true` to `shadow: false` once they've proven themselves.
+
+Shadow mode is the safe on-ramp for new policy. See [ADR 0001](adr/0001-deterministic-policy-evaluation.md) for why open-text LLM review of shadow-mode findings happens outside the enforcement path.
+
+### Execution rings
+
+Before any rule evaluates, the governor classifies the action into one of four execution rings (Ring 0 sandbox through Ring 3 production-facing). Ring 0 actions skip policy entirely. Rings 1–3 require an active runbook; Ring 3 additionally consults trust state and approval requirements. See [ADR 0002](adr/0002-four-execution-rings.md) for the full ring model.
 
 ## Rule Language
 
@@ -148,6 +163,9 @@ The log is append-only, hashed, and queryable. For any change in the system, you
 
 1. **Deny by default on new action classes.** Add explicit allow rules rather than leaving holes.
 2. **Every deny rule must include a suggested path forward.** Workers need to know what to do instead.
-3. **Prefer deterministic conditions over model-based ones.** The policy engine is a gate, not an oracle.
+3. **Prefer deterministic conditions over model-based ones.** The policy engine is a gate, not an oracle. See [ADR 0001](adr/0001-deterministic-policy-evaluation.md).
 4. **Escalate, don't just block, on repeated failure.** A worker retrying the same denied action is a signal the runbook is wrong — involve a human.
 5. **Version your policies.** Record which rule set was active at decision time for audit replay.
+6. **New rules ship `shadow: true` first.** Only promote to enforcement after audit-log review confirms the rule fires when expected and stays quiet otherwise.
+7. **Classify actions by ring, not just name.** Every new action class gets a ring assignment per [ADR 0002](adr/0002-four-execution-rings.md). Unclassified actions default to Ring 3 — conservative by design, surfaces gaps quickly.
+8. **Do not conflate identity, authority, and liveness.** The enforcement gate checks all three independently per [ADR 0003](adr/0003-three-property-trust.md); policies consume the booleans, not a merged score.

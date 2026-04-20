@@ -14,14 +14,20 @@ The MVP wedge is **Claude Code `PreToolUse` enforcement + deploy/migration verif
 
 Build the minimum StepProof daemon that can track workflow state.
 
-- [ ] Postgres schema: `runbook_templates`, `workflow_runs`, `step_runs`, `policy_decisions`, `audit_log`.
+- [ ] Postgres schema: `runbook_templates`, `workflow_runs`, `step_runs`, `policy_decisions`, `audit_log`, `liveness_heartbeats`.
 - [ ] HTTP API:
   - `POST /runs` — start a workflow from a template.
   - `POST /runs/:id/evidence` — submit step evidence.
-  - `POST /policy/evaluate` — evaluate a proposed action.
+  - `POST /runs/:id/heartbeat` — register/refresh liveness TTL.
+  - `POST /policy/evaluate` — evaluate a proposed action. Returns `{decision, reason, policy_id, suggested_tool, trust_signals}`.
   - `GET /runs/:id` — current state.
-- [ ] YAML rule-set policy engine (OPA/Cedar pluggable later).
-- [ ] Append-only audit log with content-addressed payloads.
+  - `GET /runs` / `GET /audit` — cursor-paginated listings.
+- [ ] YAML rule-set policy engine (OPA/Cedar pluggable later). Supports `allow` / `deny` / `transform` / `require_approval` / `audit` decisions, priority-ordered rules, content-pattern matching.
+- [ ] Ring classifier — every action maps to Ring 0/1/2/3 per [ADR 0002](adr/0002-four-execution-rings.md). Unclassified → Ring 3.
+- [ ] Three-property trust state per [ADR 0003](adr/0003-three-property-trust.md) — identity + authority + liveness as independent gates.
+- [ ] Shadow mode — `shadow: true` on rules and runbooks; log-only evaluation.
+- [ ] Append-only audit log with content-addressed payloads and `compliance_tags[]`.
+- [ ] Alarm-based step timeouts (no synchronous waits on step completion).
 
 ## Phase 2 — Claude Code Adapter
 
