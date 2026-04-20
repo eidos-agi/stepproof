@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "stepproof": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/dshanklinbv/repos-eidos-agi/stepproof",
+        "stepproof",
+        "mcp"
+      ]
+    }
+  }
+}
