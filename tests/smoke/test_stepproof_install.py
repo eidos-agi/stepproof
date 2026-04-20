@@ -167,6 +167,23 @@ def test_install_project_scope_uses_cwd_claude(temp_scope, monkeypatch):
     assert (project / ".claude" / "hooks" / "stepproof_pretooluse.py").is_file()
 
 
+def test_install_project_scope_respects_project_dir_when_different_from_cwd(
+    temp_scope, monkeypatch, tmp_path
+):
+    """Regression: install --scope project --project-dir X must land in X/.claude/,
+    not in the current working directory's .claude/. The bug I hit when setting
+    up stepproof-test from inside the main stepproof repo."""
+    _, project = temp_scope
+    # cwd is the base fixture's home-like dir (not `project`).
+    monkeypatch.chdir(tmp_path)
+    install(scope="project", project_dir=project)
+    # Must have landed under project/.claude/, NOT under tmp_path/.claude/.
+    assert (project / ".claude" / "hooks" / "stepproof_pretooluse.py").is_file()
+    assert not (tmp_path / ".claude").exists(), (
+        "install wrote to cwd's .claude/ instead of project_dir's .claude/"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Uninstall: reversal is clean
 # ---------------------------------------------------------------------------

@@ -76,11 +76,17 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _resolve_base_dir(scope: str) -> Path:
+def _resolve_base_dir(scope: str, project_dir: Path) -> Path:
+    """Decide where hooks + settings.json go.
+
+    Project scope uses the explicit project_dir rather than cwd — the bug that
+    landed StepProof under the wrong repo's .claude/ when invoking
+    `stepproof install --scope project --project-dir X` from a different cwd.
+    """
     if scope == "user":
         return Path.home() / ".claude"
     elif scope == "project":
-        return Path.cwd() / ".claude"
+        return project_dir / ".claude"
     raise ValueError(f"Unknown scope: {scope!r} (expected 'user' or 'project')")
 
 
@@ -146,8 +152,8 @@ def install(scope: str = "user", project_dir: Path | None = None) -> Manifest:
     Returns:
         The manifest describing everything installed.
     """
-    base = _resolve_base_dir(scope)
     project = (project_dir or Path.cwd()).resolve()
+    base = _resolve_base_dir(scope, project)
     manifest = Manifest(scope=scope, base_dir=str(base), installed_at=_utcnow_iso())
 
     # 1. Copy hook scripts.
