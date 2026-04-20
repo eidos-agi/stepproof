@@ -1,0 +1,14 @@
+# .stepproof/config.yaml — per-project StepProof configuration.
+# See docs/PROJECT_STATE.md for the full shape.
+version: 1
+
+default_environment: staging
+
+runbook_dirs:
+  - .stepproof/runbooks
+
+classification_overrides:
+  bash_patterns: []
+
+shadow: false
+fail_closed_rings: []

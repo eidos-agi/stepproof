@@ -35,7 +35,6 @@ yarn-error.log*
 *.db
 *.sqlite
 *.sqlite3
-.stepproof/
 logs/
 uv.lock
 
@@ -43,3 +42,12 @@ uv.lock
 secrets/
 *.pem
 *.key
+
+# StepProof runtime state (machine-specific, ephemeral).
+# NOTE: .stepproof/ itself is TRACKED — the layout mirrors .visionlog/.
+# Only these child paths are runtime noise.
+.stepproof/sessions/
+.stepproof/audit-buffer.jsonl
+.stepproof/adapter-manifest.json
+.stepproof/runtime.db
+.stepproof/runtime.db-*

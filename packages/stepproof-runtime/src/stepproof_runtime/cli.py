@@ -146,6 +146,131 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+DEFAULT_GITIGNORE_BLOCK = """\
+# StepProof runtime state (machine-specific, ephemeral).
+# NOTE: .stepproof/ itself is TRACKED — the layout mirrors .visionlog/.
+# Only these child paths are runtime noise.
+.stepproof/sessions/
+.stepproof/audit-buffer.jsonl
+.stepproof/adapter-manifest.json
+.stepproof/runtime.db
+.stepproof/runtime.db-*
+"""
+
+# Directories mirror .visionlog's artifact-per-folder convention.
+# Each dir gets a README so git tracks it even when empty.
+TRACKED_DIRS = {
+    "runbooks": (
+        "# Project runbooks\n\n"
+        "YAMLs in this directory are loaded into StepProof alongside the "
+        "built-in library. See docs/RUNBOOKS.md for the schema.\n"
+    ),
+    "overrides": (
+        "# Classification overrides\n\n"
+        "YAML files here extend the user-level action classification with "
+        "project-specific rules (e.g., `terraform apply` → Ring 3).\n"
+    ),
+    "plans": (
+        "# Declared plans (audit trail)\n\n"
+        "Approved `keep_me_honest` plan hashes land here for peer review. "
+        "Tracked in git; becomes part of the project's compliance record.\n"
+    ),
+}
+
+# Gitignored — session state, audit buffer, install manifest.
+EPHEMERAL_DIRS = ("sessions",)
+
+
+def _build_config(project_id: str, project_name: str, created: str) -> str:
+    return f"""\
+---
+id: "{project_id}"
+project: "{project_name}"
+created: "{created}"
+version: 1
+---
+
+# .stepproof/config.yaml — per-project StepProof configuration.
+# See docs/PROJECT_STATE.md for the full shape. Mirrors .visionlog conventions.
+
+default_environment: staging
+
+runbook_dirs:
+  - .stepproof/runbooks
+
+override_dirs:
+  - .stepproof/overrides
+
+shadow: false
+fail_closed_rings: []
+"""
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """Initialize .stepproof/ in a project — mirrors .visionlog conventions.
+
+    Creates:
+      .stepproof/config.yaml       — project config with stable UUID
+      .stepproof/runbooks/         — tracked; project runbook YAMLs
+      .stepproof/overrides/        — tracked; classification overrides
+      .stepproof/plans/            — tracked; approved declared-plan hashes
+      .stepproof/sessions/         — ephemeral; gitignored
+    """
+    import uuid
+    from datetime import date
+    from pathlib import Path
+
+    root = Path(args.path).resolve()
+    sp_dir = root / ".stepproof"
+    cfg_path = sp_dir / "config.yaml"
+    gitignore_path = root / ".gitignore"
+
+    sp_dir.mkdir(exist_ok=True)
+
+    # Tracked subdirs with README.md sentinels.
+    for name, readme_body in TRACKED_DIRS.items():
+        d = sp_dir / name
+        d.mkdir(exist_ok=True)
+        readme = d / "README.md"
+        if not readme.exists():
+            readme.write_text(readme_body)
+
+    # Ephemeral subdirs — dir itself is gitignored.
+    for name in EPHEMERAL_DIRS:
+        (sp_dir / name).mkdir(exist_ok=True)
+
+    # Config — preserve existing id on re-init.
+    if cfg_path.exists() and not args.force:
+        print(f"{cfg_path} already exists; leaving it. (--force to regenerate)")
+    else:
+        project_id = str(uuid.uuid4())
+        project_name = args.name or root.name
+        created = date.today().isoformat()
+        cfg_path.write_text(_build_config(project_id, project_name, created))
+        print(f"wrote {cfg_path} (id={project_id})")
+
+    # .gitignore hygiene.
+    if gitignore_path.exists():
+        current = gitignore_path.read_text()
+        if ".stepproof/sessions/" not in current:
+            with gitignore_path.open("a") as f:
+                if not current.endswith("\n"):
+                    f.write("\n")
+                f.write("\n")
+                f.write(DEFAULT_GITIGNORE_BLOCK)
+            print(f"appended .stepproof/* ignore rules to {gitignore_path}")
+        else:
+            print(f"{gitignore_path} already ignores .stepproof runtime state; leaving it")
+    else:
+        gitignore_path.write_text(DEFAULT_GITIGNORE_BLOCK)
+        print(f"wrote {gitignore_path}")
+
+    print(f"\nStepProof initialized at {sp_dir}")
+    print("Tracked: config.yaml, runbooks/, overrides/, plans/")
+    print("Ignored: sessions/, audit-buffer.jsonl, adapter-manifest.json, runtime.db")
+    return 0
+
+
 def cmd_version(args: argparse.Namespace) -> int:
     print(VERSION)
     return 0
@@ -202,6 +327,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     pinst = sub.add_parser("install", help="Wire StepProof into a Claude Code project")
     pinst.set_defaults(func=cmd_install)
+
+    pinit = sub.add_parser("init", help="Initialize .stepproof/ in a project")
+    pinit.add_argument("path", nargs="?", default=".")
+    pinit.add_argument("--name", help="Project name (defaults to directory name)")
+    pinit.add_argument("--force", action="store_true",
+                       help="Regenerate .stepproof/config.yaml (new UUID)")
+    pinit.set_defaults(func=cmd_init)
 
     pver = sub.add_parser("version", help="Show version")
     pver.set_defaults(func=cmd_version)
