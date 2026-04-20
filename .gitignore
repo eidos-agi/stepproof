@@ -37,6 +37,7 @@ yarn-error.log*
 *.sqlite3
 .stepproof/
 logs/
+uv.lock
 
 # Secrets
 secrets/
