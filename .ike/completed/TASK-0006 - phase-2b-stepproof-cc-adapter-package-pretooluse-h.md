@@ -1,7 +1,7 @@
 ---
 id: TASK-0006
 title: 'Phase 2b — stepproof-cc-adapter package: PreToolUse hook + install'
-status: To Do
+status: Done
 created: '2026-04-20'
 priority: high
 milestone: Phase 2 — Keep Me Honest + Claude Code Adapter
@@ -18,5 +18,6 @@ acceptance-criteria:
   - PreToolUse hook degrades gracefully when daemon unreachable (exits 0, buffers audit)
   - 'Live smoke: install into a scratch repo, start Claude Code, observe hooks firing
   on test tool calls'
+updated: '2026-04-20'
 ---
 New package: packages/stepproof-cc-adapter/. Ships the uv PreToolUse hook, classification.yaml (client-side action→ring mapping), SessionStart/End/PreCompact hooks, verifier subagent definitions with disallowedTools, 6 slash commands (/keep-me-honest, /runbook-start, /runbook-status, /step-complete, /approve, /runbook-abandon). stepproof install CLI subcommand writes these to .claude/, edits settings.json with matchers, edits .mcp.json. stepproof uninstall reverses via manifest.
