@@ -28,13 +28,19 @@ Build the minimum StepProof daemon that can track workflow state.
 The first hook-based enforcement surface. Follows the idioms documented in [LESSONS_FROM_HOOKS_MASTERY.md](LESSONS_FROM_HOOKS_MASTERY.md) — uv single-file scripts, exit-code contract, matchers in `settings.json`.
 
 - [ ] `PreToolUse` adapter that calls StepProof's `/policy/evaluate`.
-- [ ] `PermissionRequest` adapter — second-chance gate with `updatedInput` transform support.
+- [ ] `PermissionRequest` adapter — log + `updatedInput` transform support (not interactive prompts).
 - [ ] `SubagentStart` / `SubagentStop` adapters — record verifier dispatch lifecycle to audit log.
-- [ ] `PreCompact` adapter — inject runbook state into compacted transcripts.
+- [ ] `SessionStart` adapter — inject active runbook, current step, allowed tools via `additionalContext`.
+- [ ] `PreCompact` adapter — re-inject runbook state so the worker doesn't forget after compaction.
+- [ ] `UserPromptSubmit` adapter — early soft-nudge when the prompt mentions denied tools.
 - [ ] `SessionEnd` adapter — mark abandoned runs.
+- [ ] `Setup` adapter — first-run installer: creates `.stepproof/`, drops verifier agents, writes scoped matchers.
 - [ ] Deny messages routed back to the agent via exit 2 + stderr, including suggested alternatives.
-- [ ] Graceful degradation: control-plane outage must not break the session.
+- [ ] Graceful degradation: control-plane outage must not break the session. Local JSONL audit buffer at `.stepproof/audit-buffer.jsonl`, flushed on reconnect.
 - [ ] Verifier subagent definitions under `.claude/agents/stepproof/` with `disallowedTools` enforced read-only.
+- [ ] `runbook-author` subagent (meta-agent pattern) — generates valid runbook YAML from plain-English descriptions.
+- [ ] Custom slash commands: `/runbook-start`, `/runbook-status`, `/step-complete`, `/step-evidence`, `/approve`, `/runbook-abandon`.
+- [ ] Per-session state at `.stepproof/sessions/<session_id>.json` binding session → run → step.
 - [ ] `stepproof run start <template>` CLI to open a workflow.
 - [ ] `stepproof step complete <step_id> --evidence key=value ...` CLI for step completion.
 
