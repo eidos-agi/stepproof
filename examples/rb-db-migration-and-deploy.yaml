@@ -1,0 +1,74 @@
+# StepProof runbook: DB migration + staged/prod deploy.
+# This is the canonical "why StepProof exists" example —
+# workers routinely bypass migration tooling and run raw psql
+# against production. This runbook makes that impossible.
+
+template_id: rb-db-migration-and-deploy
+version: 1.0.0
+name: Apply DB migration and deploy service
+description: >
+  Enforces the full migration + deploy flow. Raw psql is explicitly
+  denied in staging and production; migrations must go through the
+  sanctioned cerebro-migrate tooling. Production deploy requires a
+  passing verifier on the staging migration and human sign-off.
+risk_level: high
+allowed_environments: [staging, production]
+requires_human_signoff: true
+
+steps:
+  - step_id: s1
+    description: Author migration file and open PR
+    allowed_tools: [editor, git]
+    required_evidence: [branch_name, pr_url]
+    verification_method: verify_pr_opened
+    verification_tier: tier1
+    timeout_seconds: 3600
+    on_fail: retry
+    on_fail_max_retries: 2
+
+  - step_id: s2
+    description: CI tests pass on PR
+    allowed_tools: [ci_cli]
+    required_evidence: [ci_run_id]
+    verification_method: verify_ci_green
+    verification_tier: tier1
+    timeout_seconds: 1800
+    on_fail: block
+
+  - step_id: s3
+    description: Apply migration to staging via sanctioned tooling
+    allowed_tools: [cerebro_migrate_staging]
+    denied_tools: [psql, pg_dump, pg_restore]
+    required_evidence: [migration_name, staging_db_id, deploy_id]
+    verification_method: verify_migration_applied
+    verification_tier: tier1
+    timeout_seconds: 600
+    on_fail: escalate_human
+
+  - step_id: s4
+    description: Smoke-test staging
+    allowed_tools: [http_probe, log_reader]
+    required_evidence: [smoke_run_id]
+    verification_method: verify_smoke_logs
+    verification_tier: tier2
+    timeout_seconds: 900
+    on_fail: block
+
+  - step_id: s5
+    description: Apply migration to production via sanctioned tooling
+    allowed_tools: [cerebro_migrate_production]
+    denied_tools: [psql, pg_dump, pg_restore]
+    required_evidence: [migration_name, prod_db_id, deploy_id]
+    verification_method: verify_migration_applied
+    verification_tier: tier1
+    timeout_seconds: 600
+    on_fail: escalate_human
+
+  - step_id: s6
+    description: Deploy service to production
+    allowed_tools: [deploy_cli]
+    required_evidence: [deploy_id]
+    verification_method: verify_deploy_and_health
+    verification_tier: tier2
+    timeout_seconds: 900
+    on_fail: escalate_human
