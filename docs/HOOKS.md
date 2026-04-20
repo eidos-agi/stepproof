@@ -1,64 +1,178 @@
 # Hook Integration Pseudo-Code
 
-Concrete shapes for the three enforcement points: `PreToolUse`, `complete_step`, and verifier dispatch. These are **pseudo-code**: enough to guide implementation, not tied to a specific language yet.
+Concrete shapes for the enforcement points. StepProof integrates with Claude Code through its native hook lifecycle; the pseudo-code below follows the idioms documented in [LESSONS_FROM_HOOKS_MASTERY.md](LESSONS_FROM_HOOKS_MASTERY.md) — `uv` single-file scripts, exit-code semantics, JSON over stdin, matchers in `settings.json`.
 
-## 1. `PreToolUse` Adapter (Claude Code)
+## 0. Claude Code Hook Contract
 
-The Claude Code adapter is a thin hook that forwards candidate actions to the StepProof control plane. Business logic lives server-side.
+Every StepProof adapter is a `uv` single-file Python script invoked by Claude Code:
 
-```typescript
-// .claude/hooks/stepproof-pretooluse.ts
-import { normalizeAction, callStepProof, renderDeny } from "./stepproof-sdk";
+```python
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["httpx", "python-dotenv"]
+# ///
+```
 
-export async function preToolUse(event: ToolUseEvent): Promise<HookResult> {
-  const action = normalizeAction({
-    actor_type: "worker_agent",
-    actor_id: event.session_id,
-    human_owner_id: event.user_id,
-    tool: event.tool_name,
-    action_type: classifyAction(event.tool_name, event.tool_input),
-    target_env: inferEnvironment(event.tool_input),
-    payload_summary: summarize(event.tool_input),
-    run_id: activeRunId(),      // null if no runbook is active
-    step_id: currentStepId(),   // null if no runbook is active
-  });
+**Exit codes are the contract:**
 
-  const decision = await callStepProof("/policy/evaluate", action);
+| Exit code | Behavior |
+|-----------|----------|
+| `0` | Continue. Hook took no position. |
+| `2` | Block the tool call. `stderr` is shown to Claude as the denial reason. |
+| Any exception | Catch and exit `0`. A crashed hook must not break the session. |
 
-  switch (decision.decision) {
-    case "allow":
-      return { allow: true };
+**Registration** in `.claude/settings.json` uses matchers to limit blast radius:
 
-    case "deny":
-      return {
-        allow: false,
-        message: renderDeny(decision),
-        // Renders: "Blocked by policy {policy_id}: {reason}. Try {suggested_tool}."
-      };
-
-    case "transform":
-      return {
-        allow: true,
-        transform_tool_input: decision.transformed_payload,
-      };
-
-    case "require_approval":
-      return {
-        allow: false,
-        message:
-          `This action requires human approval. ` +
-          `Request filed as ${decision.approval_id}. ` +
-          `Check status: stepproof approval view ${decision.approval_id}`,
-      };
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|mcp__stepproof__.*|mcp__cerebro__deploy.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run $CLAUDE_PROJECT_DIR/.claude/hooks/stepproof_pretooluse.py"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
-Notes:
+Other enforcement surfaces StepProof uses: `PermissionRequest` (second-chance gate with `updatedInput` transform support), `SubagentStart`/`SubagentStop` (verifier dispatch lifecycle), `PreCompact` (inject runbook state so the worker never forgets which step it's on), `SessionEnd` (mark abandoned runs).
 
-- `classifyAction` maps tool name + input into normalized action classes (`database.write`, `deploy.production`, `secrets.rotate`, etc.). Start with a simple lookup table; evolve as needed.
-- `activeRunId` / `currentStepId` are read from a local `.stepproof/run.json` maintained by the `stepproof run` CLI, or from the control plane keyed by session/PID.
-- The hook **never** decides locally. It only adapts. All policy logic is server-side so it can be versioned, replayed, and audited.
+---
+
+
+## 1. `PreToolUse` Adapter
+
+The Claude Code adapter is a thin `uv` script that forwards candidate actions to the StepProof control plane. Business logic lives server-side. File: `.claude/hooks/stepproof_pretooluse.py`.
+
+```python
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["httpx", "python-dotenv"]
+# ///
+"""StepProof PreToolUse adapter. Forwards normalized actions to /policy/evaluate."""
+import json, os, sys
+from pathlib import Path
+
+def load_active_run() -> dict | None:
+    """Read .stepproof/run.json — the active runbook state for this session."""
+    path = Path.cwd() / ".stepproof" / "run.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return None
+
+def classify_action(tool_name: str, tool_input: dict) -> str:
+    """Map tool name + input to a normalized action class."""
+    # Simple lookup to start; evolve as the action taxonomy grows.
+    if tool_name == "Bash":
+        cmd = tool_input.get("command", "").lstrip()
+        if cmd.startswith(("psql", "pg_dump", "pg_restore")):
+            return "database.write"
+        if cmd.startswith(("cerebro-migrate", "railway deploy", "deploy ")):
+            return "deploy.risky"
+    if tool_name.startswith("mcp__cerebro__deploy"):
+        return "deploy.production"
+    if tool_name in ("Write", "Edit"):
+        return "filesystem.write"
+    return f"tool.{tool_name.lower()}"
+
+def normalize(input_data: dict) -> dict:
+    run = load_active_run() or {}
+    return {
+        "actor_type": "worker_agent",
+        "actor_id": input_data.get("session_id"),
+        "human_owner_id": os.getenv("STEPPROOF_HUMAN_OWNER", "unknown"),
+        "tool": input_data.get("tool_name"),
+        "tool_input": input_data.get("tool_input", {}),
+        "action_type": classify_action(
+            input_data.get("tool_name", ""),
+            input_data.get("tool_input", {}),
+        ),
+        "run_id": run.get("run_id"),
+        "step_id": run.get("current_step"),
+        "target_env": run.get("environment"),
+    }
+
+def call_stepproof(action: dict) -> dict:
+    """POST to /policy/evaluate. Degrade gracefully on any failure."""
+    import httpx
+    url = os.getenv("STEPPROOF_URL", "http://localhost:8787") + "/policy/evaluate"
+    try:
+        r = httpx.post(url, json=action, timeout=2.0)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        # Degrade to allow; control-plane outage must not break the session.
+        # The audit log records the skipped decision on reconnect.
+        return {"decision": "allow", "reason": "stepproof-unreachable", "skipped": True}
+
+def main():
+    try:
+        input_data = json.load(sys.stdin)
+        action = normalize(input_data)
+        decision = call_stepproof(action)
+
+        match decision.get("decision"):
+            case "allow":
+                sys.exit(0)
+
+            case "deny":
+                msg = (
+                    f"[StepProof {decision.get('policy_id', 'unknown')}] "
+                    f"{decision.get('reason', 'blocked')}. "
+                    f"Try: {decision.get('suggested_tool', 'see stepproof run status')}"
+                )
+                print(msg, file=sys.stderr)
+                sys.exit(2)
+
+            case "transform":
+                # Emit JSON on stdout to rewrite the tool input.
+                print(json.dumps({
+                    "hookSpecificOutput": {
+                        "hookEventName": "PreToolUse",
+                        "decision": {
+                            "behavior": "allow",
+                            "updatedInput": decision["transformed_payload"],
+                        },
+                    }
+                }))
+                sys.exit(0)
+
+            case "require_approval":
+                print(
+                    f"Approval required: {decision.get('approval_id')}. "
+                    f"Check: stepproof approval view {decision.get('approval_id')}",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+
+            case _:
+                sys.exit(0)
+
+    except Exception:
+        # Never break the session. Log locally, exit 0.
+        sys.exit(0)
+
+if __name__ == "__main__":
+    main()
+```
+
+Design notes:
+
+- **The hook never decides locally.** It normalizes the event, calls the control plane, and enforces the returned decision. All policy logic is server-side so it is versioned, replayable, and centrally auditable.
+- **`classify_action` is a lookup table to start.** Grow the taxonomy as new action classes emerge. Don't over-engineer classification on day one.
+- **Active run state lives at `.stepproof/run.json`** — maintained by `stepproof run start|step complete|run end`. The hook reads it; it doesn't own it.
+- **Graceful degradation is mandatory.** If the control plane is down, the hook allows, flags the decision as `skipped`, and the audit buffer catches up on reconnect. A StepProof outage must never strand the worker.
 
 ## 2. `complete_step` Flow (Control Plane)
 

@@ -29,6 +29,20 @@ Default tier. Shell or Python functions that query concrete system state.
 
 Used when evidence is unstructured: logs, diffs, qualitative fit.
 
+**Structural read-only enforcement.** Tier 2 and Tier 3 verifiers ship as Claude Code subagent definitions with `disallowedTools` in the frontmatter. The SDK blocks write tools at the agent layer — prompt discipline is not the guarantee:
+
+```yaml
+---
+name: stepproof-verifier-tier2
+description: Read-only verifier for unstructured evidence (logs, diffs).
+model: claude-haiku-4-5-20251001
+disallowedTools: Write, Edit, NotebookEdit, Bash
+---
+```
+
+The verifier gets only read-only MCP tools (git read-only, CI status, deploy-status API, read-only DB, log reader). It is structurally incapable of "fixing" the problem it was asked to verify.
+
+
 **Use for:**
 - "Does this diff implement the requirement without unrelated changes?"
 - "Do these logs indicate the new connector registered successfully?"

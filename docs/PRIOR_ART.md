@@ -6,7 +6,7 @@ StepProof stands on a growing body of 2026 work in agent governance, verifiable 
 
 ### Hook + validator patterns for coding agents
 
-- **[claude-code-hooks-mastery](https://github.com/disler/claude-code-hooks-mastery)** — documents two-agent pairing where a validator increases trust that work was delivered correctly. Shares the worker/verifier split with StepProof.
+- **[claude-code-hooks-mastery](https://github.com/disler/claude-code-hooks-mastery)** — reference implementation of the full Claude Code hook lifecycle (12 events) and a builder/validator subagent pair with read-only validator enforced via `disallowedTools` in the agent frontmatter. StepProof adopts its exit-code contract, uv single-file script idiom, matcher scoping, and the structural read-only verifier pattern. See [LESSONS_FROM_HOOKS_MASTERY.md](LESSONS_FROM_HOOKS_MASTERY.md) for the full extraction.
 - **Builder-validator pattern** — recognized Claude Code pattern where a validator has read access but no write access, so it cannot "collude" by quietly patching the problem away. StepProof codifies this rule as **verifiers have no write tools, ever.**
 - **Claude Code internal verifier-agent prompts** — there is a prompt pattern described as "a dedicated agent whose job is to TRY TO BREAK the implementation." Similar spirit; StepProof generalizes beyond code to infrastructure actions.
 

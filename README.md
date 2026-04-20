@@ -63,6 +63,7 @@ Verification happens in three tiers to keep cost predictable:
 - [Policy Engine](docs/POLICY.md) — decision model, hook integration
 - [Verifier Fabric](docs/VERIFIERS.md) — tiers, interface contract
 - [Hook Integration](docs/HOOKS.md) — pseudo-code for `PreToolUse`, `complete_step`, verifier dispatch
+- [Lessons from `claude-code-hooks-mastery`](docs/LESSONS_FROM_HOOKS_MASTERY.md) — idioms, exit-code contract, validator subagent pattern
 - [Prior Art](docs/PRIOR_ART.md) — what exists already and what StepProof adds
 - [Roadmap](docs/ROADMAP.md) — MVP sequence
 

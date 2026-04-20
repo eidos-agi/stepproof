@@ -25,10 +25,16 @@ Build the minimum StepProof daemon that can track workflow state.
 
 ## Phase 2 — Claude Code Adapter
 
-The first hook-based enforcement surface.
+The first hook-based enforcement surface. Follows the idioms documented in [LESSONS_FROM_HOOKS_MASTERY.md](LESSONS_FROM_HOOKS_MASTERY.md) — uv single-file scripts, exit-code contract, matchers in `settings.json`.
 
-- [ ] `PreToolUse` hook that calls StepProof's `/policy/evaluate`.
-- [ ] Deny messages routed back to the agent with suggested alternatives.
+- [ ] `PreToolUse` adapter that calls StepProof's `/policy/evaluate`.
+- [ ] `PermissionRequest` adapter — second-chance gate with `updatedInput` transform support.
+- [ ] `SubagentStart` / `SubagentStop` adapters — record verifier dispatch lifecycle to audit log.
+- [ ] `PreCompact` adapter — inject runbook state into compacted transcripts.
+- [ ] `SessionEnd` adapter — mark abandoned runs.
+- [ ] Deny messages routed back to the agent via exit 2 + stderr, including suggested alternatives.
+- [ ] Graceful degradation: control-plane outage must not break the session.
+- [ ] Verifier subagent definitions under `.claude/agents/stepproof/` with `disallowedTools` enforced read-only.
 - [ ] `stepproof run start <template>` CLI to open a workflow.
 - [ ] `stepproof step complete <step_id> --evidence key=value ...` CLI for step completion.
 
