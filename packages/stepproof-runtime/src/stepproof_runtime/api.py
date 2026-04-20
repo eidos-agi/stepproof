@@ -359,6 +359,38 @@ async def plan_declare(plan: PlanDeclaration) -> dict[str, Any]:
     }
 
 
+@app.post("/runs/{run_id}/abandon")
+async def run_abandon(run_id: UUID, reason: str = "session_ended") -> dict[str, Any]:
+    """Mark a run as abandoned. Idempotent — already-terminal runs are a no-op."""
+    async with connect() as conn:
+        run = await _run_state(conn, run_id)
+        if run is None:
+            raise HTTPException(404, f"Run not found: {run_id}")
+        if run.status in (RunStatus.COMPLETED, RunStatus.ABANDONED, RunStatus.FAILED):
+            return {"run_id": str(run_id), "status": run.status.value, "abandoned": False}
+        now = utcnow().isoformat()
+        await conn.execute(
+            "UPDATE workflow_runs SET status = ?, ended_at = ? WHERE run_id = ?",
+            (RunStatus.ABANDONED.value, now, str(run_id)),
+        )
+        await _record_audit(
+            conn,
+            AuditEvent(
+                actor_type="system",
+                actor_id="runtime",
+                human_owner_id=run.owner_id,
+                run_id=run_id,
+                action_type="run.abandon",
+                decision=Decision.ALLOW,
+                policy_id="system.run_abandoned",
+                reason=f"Run abandoned: {reason}",
+                payload_hash=_sha256({"reason": reason}),
+            ),
+        )
+        await conn.commit()
+    return {"run_id": str(run_id), "status": "abandoned", "abandoned": True, "reason": reason}
+
+
 @app.get("/runs/{run_id}")
 async def run_status(run_id: UUID) -> dict[str, Any]:
     async with connect() as conn:
