@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-stepproof-runtime = "stepproof_runtime.cli:main"
+stepproof = "stepproof_runtime.cli:main"
 
 [build-system]
 requires = ["hatchling"]

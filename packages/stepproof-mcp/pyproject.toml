@@ -14,9 +14,6 @@ dependencies = [
     "stepproof-runtime",
 ]
 
-[project.scripts]
-stepproof-mcp = "stepproof_mcp.server:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

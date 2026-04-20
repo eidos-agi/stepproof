@@ -16,7 +16,7 @@ Exposes:
 ## Run locally
 
 ```bash
-uv run stepproof-runtime
+uv run stepproof runtime
 # => Uvicorn on http://127.0.0.1:8787
 ```
 

@@ -26,7 +26,7 @@ Add to your `.mcp.json`:
   "mcpServers": {
     "stepproof": {
       "command": "uv",
-      "args": ["run", "stepproof-mcp"]
+      "args": ["run", "stepproof", "mcp"]
     }
   }
 }

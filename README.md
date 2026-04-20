@@ -14,6 +14,8 @@ Advisory controls — docs, `CLAUDE.md`, memory, instructions — can be read an
 
 The premise is simple: **an agent cannot be trusted to voluntarily follow a process. The system has to force it, and an independent verifier has to prove it was followed.**
 
+The concrete cost of not having this: see [Case Study: one observed session](docs/CASE_STUDY.md) — 11 hours of preventable debugging across six incidents (environment cross-wiring, migration bypass, zombie containers, Docker cache persistence, ad-hoc scripts, silent null violations). Every one of them maps to a specific verifier step StepProof would have run. That's not hypothetical. That's one session.
+
 ---
 
 ## How It Works
@@ -68,6 +70,10 @@ Verification happens in three tiers to keep cost predictable:
 - [Prior Art — Deeper Dive](docs/PRIOR_ART_DEEPER.md) — per-source extraction with StepProof implications
 - [Architecture Decision Records](docs/adr/) — numbered, dated, immutable decisions
 - [Roadmap](docs/ROADMAP.md) — MVP sequence
+- [Case Study: one observed session](docs/CASE_STUDY.md) — the 11-hour session that validated the entire thesis
+- [Keep Me Honest](docs/KEEP_ME_HONEST.md) — agent-declared plans as first-class runbooks
+- [Open Questions](docs/OPEN_QUESTIONS.md) — the three hardest seams, worked through honestly
+- [Adapter Bridge](docs/ADAPTER_BRIDGE.md) — how Claude Code hooks talk to StepProof
 
 ## Origin
 
