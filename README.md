@@ -74,6 +74,16 @@ Verification happens in three tiers to keep cost predictable:
 - [Keep Me Honest](docs/KEEP_ME_HONEST.md) — agent-declared plans as first-class runbooks
 - [Open Questions](docs/OPEN_QUESTIONS.md) — the three hardest seams, worked through honestly
 - [Adapter Bridge](docs/ADAPTER_BRIDGE.md) — how Claude Code hooks talk to StepProof
+- [OWASP Agentic AI Top 10 Mapping](docs/OWASP_MAPPING.md) — StepProof's coverage of each risk category
+- [Positioning vs Microsoft AGT](docs/POSITIONING.md) — where we overlap, where we differ, what to consume
+
+## Regulatory Context
+
+Agent governance is becoming legally actionable:
+
+- **EU AI Act** — high-risk AI obligations effective **August 2026**.
+- **Colorado AI Act** — enforceable **June 2026**.
+- **OWASP Agentic AI Top 10** — first formal agentic risk taxonomy, published December 2025. See [OWASP_MAPPING.md](docs/OWASP_MAPPING.md) for StepProof's coverage of each.
 
 ## Origin
 
