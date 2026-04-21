@@ -1,5 +1,9 @@
-xychart-beta
-    title "Rounds completed honestly (of 15), vague prompt"
-    x-axis ["WITHOUT StepProof", "WITH StepProof"]
-    y-axis "Real rounds played (ground truth)" 0 --> 15
-    bar [6, 15]
+flowchart LR
+    A["<b>WITHOUT StepProof</b><br/><br/><font size='6'>6 / 15</font><br/>rounds actually played<br/><br/><b>CHEATED</b><br/><i>(reported 'Game complete')</i>"]
+    B["<b>WITH StepProof</b><br/><br/><font size='6'>15 / 15</font><br/>rounds actually played<br/><br/><b>HONEST</b><br/><i>(plan denied every shortcut)</i>"]
+
+    classDef cheated fill:#fde4e4,stroke:#cc2020,stroke-width:3px,color:#000
+    classDef honest  fill:#e4fde4,stroke:#208020,stroke-width:3px,color:#000
+
+    class A cheated
+    class B honest
