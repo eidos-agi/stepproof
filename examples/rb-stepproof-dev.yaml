@@ -4,12 +4,14 @@
 #
 #   stepproof run start rb-stepproof-dev
 #
-# Each step's allowed_tools is narrow by design. If a legitimate flow
-# needs a tool outside the current step, fix the step (or the plan) —
-# do not add an override. That's the thesis being tested on itself.
+# Each step's allowed_tools is narrow by design but always includes
+# mcp__stepproof__stepproof_step_complete so the agent can advance.
+# If a legitimate flow needs a tool outside the current step, fix the
+# step (or the plan) — do not add an override. That's the thesis being
+# tested on itself.
 
 template_id: rb-stepproof-dev
-version: 1.0.0
+version: 1.0.1
 name: StepProof SDLC — test-first, verified, committed
 description: >
   Gated development cycle for this repository. Every change moves
@@ -29,6 +31,7 @@ steps:
       - LS
       - TodoWrite
       - NotebookRead
+      - mcp__stepproof__stepproof_step_complete
     required_evidence: [intent_summary, scope]
     verification_method: verify_pr_opened   # stub — the summary + scope are the "PR"
     verification_tier: tier1
@@ -45,6 +48,7 @@ steps:
       - Write
       - Edit
       - TodoWrite
+      - mcp__stepproof__stepproof_step_complete
     required_evidence: [path, min_lines]
     verification_method: verify_file_exists
     verification_tier: tier1
@@ -63,6 +67,7 @@ steps:
       - Edit
       - MultiEdit
       - TodoWrite
+      - mcp__stepproof__stepproof_step_complete
     required_evidence: [path, min_lines]
     verification_method: verify_file_exists
     verification_tier: tier1
@@ -71,10 +76,11 @@ steps:
     on_fail_max_retries: 3
 
   - step_id: s4
-    description: Full pytest suite green — ≥145 tests, zero failures
+    description: Full pytest suite green — zero failures
     allowed_tools:
       - Bash
       - Read
+      - mcp__stepproof__stepproof_step_complete
     required_evidence: [pytest_output_path, min_passed]
     verification_method: verify_pytest_passed
     verification_tier: tier1
@@ -90,6 +96,7 @@ steps:
       - Edit
       - Glob
       - Grep
+      - mcp__stepproof__stepproof_step_complete
     required_evidence: [path, min_lines]
     verification_method: verify_file_exists
     verification_tier: tier1
@@ -102,6 +109,7 @@ steps:
     allowed_tools:
       - Bash
       - Read
+      - mcp__stepproof__stepproof_step_complete
     required_evidence: [commit_sha]
     verification_method: verify_git_commit
     verification_tier: tier1
@@ -109,10 +117,11 @@ steps:
     on_fail: escalate_human
 
   - step_id: s7
-    description: Push to origin (optional — skip with run_abandon if local-only)
+    description: Push to origin (abandon the run with `run_abandon` if local-only)
     allowed_tools:
       - Bash
       - Read
+      - mcp__stepproof__stepproof_step_complete
     required_evidence: [commit_sha]
     verification_method: verify_git_commit
     verification_tier: tier1
