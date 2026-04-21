@@ -205,6 +205,7 @@ Agent governance is becoming legally actionable. StepProof's architecture is des
 ## Design Docs
 
 ### Core
+- **[Philosophy](docs/PHILOSOPHY.md)** — the scar, the thesis, what StepProof is and is not, the honest limit
 - [Runtime Handshake](docs/RUNTIME_HANDSHAKE.md) — `.stepproof/` contract, invariants, failure modes
 - [Adapter Bridge](docs/ADAPTER_BRIDGE.md) — how Claude Code hooks talk to StepProof
 - [Architecture](docs/ARCHITECTURE.md) — roles, components, end-to-end flow
