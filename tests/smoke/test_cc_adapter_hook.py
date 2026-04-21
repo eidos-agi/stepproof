@@ -25,6 +25,7 @@ HOOK_PATH = (
 def _run_hook(event: dict, env: dict | None = None) -> subprocess.CompletedProcess:
     """Invoke the uv hook with a JSON event on stdin."""
     import os
+    import tempfile
 
     env_vars = dict(os.environ)
     # Point the daemon at an unreachable port so Ring 1+ actions hit the
@@ -32,6 +33,11 @@ def _run_hook(event: dict, env: dict | None = None) -> subprocess.CompletedProce
     # making network calls during unit tests.
     env_vars["STEPPROOF_URL"] = "http://127.0.0.1:1"  # reserved, always refused
     env_vars["STEPPROOF_TIMEOUT_MS"] = "200"
+    # Isolate from any ambient .stepproof/active-run.json in the current
+    # working directory — otherwise tests can be polluted by a stuck run
+    # in the developer's own repo and the allowed_tools enforcement will
+    # short-circuit before the classification path is exercised.
+    env_vars["STEPPROOF_STATE_DIR"] = tempfile.mkdtemp(prefix="sp-hook-test-")
     if env:
         env_vars.update(env)
 

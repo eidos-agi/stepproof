@@ -92,10 +92,13 @@ def test_installed_hook_loads_classification(temp_scope):
     # Ring 0 MCP meta call — should exit 0 if classification loads.
     event = {"tool_name": "mcp__stepproof__stepproof_runbook_list", "tool_input": {}, "session_id": "t"}
     # Pass through env, but strip STEPPROOF_CLASSIFICATION so we test the default.
-    import os, subprocess, json as _json
+    # Isolate STEPPROOF_STATE_DIR so this test can't be polluted by a stuck
+    # active-run.json in the developer's own repo.
+    import os, subprocess, json as _json, tempfile
     env = {k: v for k, v in os.environ.items() if k != "STEPPROOF_CLASSIFICATION"}
     env.setdefault("STEPPROOF_URL", "http://127.0.0.1:1")
     env.setdefault("STEPPROOF_TIMEOUT_MS", "200")
+    env["STEPPROOF_STATE_DIR"] = tempfile.mkdtemp(prefix="sp-install-test-")
     r = subprocess.run(
         ["uv", "run", "--script", str(hook)],
         input=_json.dumps(event), text=True, capture_output=True, env=env, timeout=30,

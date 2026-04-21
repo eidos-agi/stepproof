@@ -51,4 +51,13 @@ secrets/
 .stepproof/adapter-manifest.json
 .stepproof/runtime.db
 .stepproof/runtime.db-*
+.stepproof/active-run.json
+.stepproof/runtime.url
 .stepproof.pre-init-backup/
+
+# Machine-specific MCP registration (hardcoded paths to user's venv).
+# Each developer writes their own .mcp.json per docs/RUN_A_CEREMONY.md.
+.mcp.json
+
+# Claude Code per-project settings. Reinstall via `stepproof install` to regenerate.
+.claude/

@@ -1,0 +1,65 @@
+# Minimal ceremony for this repo. Three gated steps, three verifiers.
+# The Hello World of StepProof — small enough to reason about end-to-end,
+# real enough to prove ordering, scope, and evidence-gating actually fire.
+
+template_id: rb-repo-simple
+version: 1.0.0
+name: Simple 3-step repo ceremony — write file, tests green, commit
+description: >
+  Minimal SDLC flow: author a file, confirm the suite is still green,
+  commit the change. Each step has a real verifier reading real state.
+risk_level: low
+allowed_environments: [staging]
+
+steps:
+  - step_id: s1
+    description: Write the target file
+    allowed_tools:
+      - Read
+      - Write
+      - Glob
+      - LS
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [path, min_lines]
+    verification_method: verify_file_exists
+    verification_tier: tier1
+    timeout_seconds: 600
+    on_fail: retry
+    on_fail_max_retries: 2
+
+  - step_id: s2
+    description: Confirm pytest suite green (iterate-to-pass permitted)
+    # Deliberately permissive: the agent iterates until verify_pytest_passed
+    # passes. Read/Write/Edit/MultiEdit/Grep/Glob let it diagnose and fix
+    # failing tests in place. Bash runs pytest. The verifier reads the real
+    # pytest summary, so the agent cannot fake the outcome — it can only
+    # make the tests actually pass. Commit and push are NOT in scope here;
+    # those belong to s3.
+    allowed_tools:
+      - Read
+      - Write
+      - Edit
+      - MultiEdit
+      - Grep
+      - Glob
+      - LS
+      - Bash
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [pytest_output_path, min_passed]
+    verification_method: verify_pytest_passed
+    verification_tier: tier1
+    timeout_seconds: 1800
+    on_fail: retry
+    on_fail_max_retries: 3
+
+  - step_id: s3
+    description: Commit the change with a proper message
+    allowed_tools:
+      - Bash
+      - Read
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [commit_sha]
+    verification_method: verify_git_commit
+    verification_tier: tier1
+    timeout_seconds: 300
+    on_fail: escalate_human
