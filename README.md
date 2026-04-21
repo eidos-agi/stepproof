@@ -216,8 +216,9 @@ Agent governance is becoming legally actionable. StepProof's architecture is des
 - [Hook Integration](docs/HOOKS.md) — `PreToolUse` contract, exit codes
 
 ### Using StepProof
-- **[Deploy to Your Project](docs/DEPLOY_TO_YOUR_PROJECT.md)** — 15-minute MVP guide. Install, customize for your migration tool, run your first real ceremony. Uses only verifiers that ship today.
-- [Run a Ceremony on This Repo](docs/RUN_A_CEREMONY.md) — the `rb-repo-simple` 3-step demo
+- **[Enforcement Tiers](docs/TIERS.md)** — the three layered adoption tiers. Start at Tier 0: evidence + audit, no hook, no session friction.
+- **[Deploy to Your Project](docs/DEPLOY_TO_YOUR_PROJECT.md)** — 5-minute Tier 0 install + customization. Add Tier 1 (hook) for specific high-stakes ceremonies when you feel the gap.
+- [Run a Ceremony on This Repo](docs/RUN_A_CEREMONY.md) — the `rb-repo-simple` 3-step demo (Tier 1).
 
 ### Testing & Verification
 - [Verification Matrix](docs/VERIFICATION_MATRIX.md) — the four levels; what each proves

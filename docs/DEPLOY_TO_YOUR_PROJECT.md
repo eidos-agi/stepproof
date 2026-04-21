@@ -1,106 +1,51 @@
-# Deploy StepProof to Your Project — 15-Minute Guide
+# Deploy StepProof to Your Project
 
-Pragmatic first-use guide. Assumes you have a real project with a
-real migration and deployment flow, and you want StepProof to stop
-the most common agent-bypass patterns *today* — without waiting for
-any of the planned increments.
+Pragmatic first-use guide. Assumes you have a real project and a
+real multi-step workflow you want agents to follow reliably.
 
-**What you get in the 15 minutes:**
+**Start at Tier 0.** No hook, no session restart, ~5 minutes of
+setup. You get declared ceremonies, evidence at each step, a real
+audit log. If you later want real-time denial of off-scope tool
+calls, add Tier 1 — the hook — for specific high-stakes ceremonies
+only.
 
-- A hook that denies raw `psql` / `pg_dump` when a migration
-  ceremony is active.
-- A runbook that requires structured evidence at each step
-  (migration name, deploy ID, row counts, active-deployment count).
-- An audit log capturing every ceremony decision with timestamps,
-  policy IDs, and verifier results.
-
-**What you don't get yet** (documented gaps, bottom of this page).
+Read [docs/TIERS.md](TIERS.md) first if you want the full tradeoff.
+The tl;dr: **Tier 0 catches the common failure modes at the step
+boundary (agent can't advance without real evidence). Tier 1 adds
+real-time prevention during the ceremony. Tier 2 adds cryptographic
+attestations. Most teams need Tier 0.**
 
 ---
 
-## Step 1 — Install StepProof in your project (2 min)
+## Tier 0 — the 5-minute install
+
+### Step 1. Install the StepProof CLI + runtime
 
 ```bash
-cd /path/to/your/project
-uv tool install stepproof   # or: pipx install stepproof
-stepproof install --scope project
+uv tool install stepproof          # or: pipx install stepproof
 ```
 
-Writes `.claude/hooks/`, `.claude/settings.json`,
-`.claude/stepproof/action_classification.yaml`, and
-`.stepproof/adapter-manifest.json`.
+Confirm:
 
----
+```bash
+stepproof --help
+```
 
-## Step 2 — Copy the starter runbook (1 min)
+### Step 2. Drop a runbook into your project
+
+Copy the starter template:
 
 ```bash
 mkdir -p examples
-# Copy from StepProof repo into your project
 cp /path/to/stepproof/examples/rb-migration-deploy-mvp.yaml \
    examples/rb-migration-deploy-mvp.yaml
 ```
 
-Or paste the contents from that file directly.
+Or write your own. A runbook is just a YAML file with steps,
+allowed_tools, required_evidence, and verification_method. See
+`examples/rb-repo-simple.yaml` for a minimal 3-step template.
 
----
-
-## Step 3 — Customize for your project's sanctioned tools (5 min)
-
-The runbook ships generic. You customize three things for your stack.
-
-### 3a. Rename the sanctioned migration tool in the classifier
-
-Open `.claude/stepproof/action_classification.yaml`. Find the
-`bash_patterns` section. If your project's migration tool isn't
-called `cerebro-migrate`, replace the pattern. For example, if you
-use `alembic`:
-
-```yaml
-  - match: '^(?:sudo\s+)?(?:env\s+\w+=\S*\s+)*alembic\s+upgrade\b'
-    action_type: database.write
-    ring: 2
-    env_overrides:
-      production: { ring: 3 }
-```
-
-For `supabase-cli`:
-
-```yaml
-  - match: '^(?:sudo\s+)?supabase\s+db\s+(push|migration\s+up)\b'
-    action_type: database.write
-    ring: 2
-    env_overrides:
-      production: { ring: 3 }
-```
-
-For `prisma`:
-
-```yaml
-  - match: '^(?:sudo\s+)?npx\s+prisma\s+migrate\s+(deploy|dev)\b'
-    action_type: database.write
-    ring: 2
-```
-
-The existing `psql`, `pg_dump`, `pg_restore` patterns stay —
-they're the shortcut you're preventing.
-
-### 3b. Adjust the runbook's allowed_tools if needed
-
-Most projects won't need changes. If you have additional
-project-specific tools (e.g., a custom deployment CLI) and want
-them in scope during s3, add them to `allowed_tools`.
-
-### 3c. Decide your row-count data source
-
-The runbook's s2 asks for `rows_extracted` and `rows_loaded`. For a
-pure schema change, you can submit matching placeholder values
-(e.g., both 0). For a data-move migration, wire these to your ETL
-output.
-
----
-
-## Step 4 — Register the stepproof MCP (3 min)
+### Step 3. Register the MCP
 
 Write `.mcp.json` in your project root:
 
@@ -112,44 +57,35 @@ Write `.mcp.json` in your project root:
       "command": "stepproof",
       "args": ["mcp"],
       "env": {
-        "STEPPROOF_STATE_DIR": "/absolute/path/to/your/project/.stepproof",
-        "STEPPROOF_RUNBOOKS_DIR": "/absolute/path/to/your/project/examples"
+        "STEPPROOF_STATE_DIR": "/absolute/path/to/project/.stepproof",
+        "STEPPROOF_RUNBOOKS_DIR": "/absolute/path/to/project/examples"
       }
     }
   }
 }
 ```
 
-If you installed StepProof via `uv tool install` and the `stepproof`
-binary is on `$PATH`, the literal command `"stepproof"` works. If
-not, use the absolute path to the binary.
+**That's it for Tier 0.** No `stepproof install` command run. No
+hook files. No `.claude/settings.json` modification. The MCP spawns
+on demand the first time the agent calls it.
 
----
+### Step 4. Restart Claude Code (once)
 
-## Step 5 — Restart Claude Code (1 min)
+Quit and relaunch in the project directory. Claude Code reads
+`.mcp.json` at session start.
 
-Quit Claude Code and relaunch in the project directory. Hooks only
-load at session start.
+### Step 5. Run a ceremony
 
----
+Ask the agent (in the new session):
 
-## Step 6 — Run a ceremony (3 min)
+> *"Start a run against `rb-migration-deploy-mvp` and walk the steps.
+> Submit structured evidence at each step."*
 
-In the new Claude Code session, ask the agent:
+The agent calls `mcp__stepproof__stepproof_run_start`,
+`mcp__stepproof__stepproof_step_complete` at each step boundary,
+and the runtime dispatches verifiers against the evidence.
 
-> *"Apply the pending migration to staging. Use StepProof's
-> `rb-migration-deploy-mvp` runbook. Start the run, do the work,
-> submit evidence at each step boundary."*
-
-Watch for:
-
-- `.stepproof/active-run.json` appearing as the run starts.
-- Any attempt to run `psql` or similar raw-SQL shortcut will be
-  denied by the hook with a clear reason.
-- Evidence at each step gates advancement. No evidence, no
-  advance.
-
-When the run reaches `status: completed`, query the audit log:
+### Step 6. Read the audit log
 
 ```bash
 sqlite3 .stepproof/runtime.db \
@@ -157,98 +93,193 @@ sqlite3 .stepproof/runtime.db \
    FROM audit_log ORDER BY timestamp DESC LIMIT 30;"
 ```
 
-That's the regulator-shaped artifact. Timestamps, policy IDs,
-verifier signatures, decision reasons — written by the runtime,
-not by the agent.
+That's your compliance artifact. Timestamped, verifier-stamped,
+written by the runtime, not by the agent.
 
 ---
 
-## What this prevents today
+## What Tier 0 prevents
 
-| Incident class | Mechanism | Status |
+| Failure mode | How |
+|---|---|
+| Agent skips a step | `current_step` is strict; `step_complete` with wrong step_id returns 409 |
+| Agent claims completion without evidence | Verifier reads real state; returns fail; run stuck |
+| Agent produces evidence in wrong shape | `required_evidence` keys enforced at runtime |
+| Agent drifts under vague prompts | Caught at step boundary — verifier rejects the claim |
+| Ambiguous completion narrative | Audit log is machine-readable ground truth |
+
+## What Tier 0 does NOT prevent
+
+| Failure mode | Why | When to add Tier 1 |
 |---|---|---|
-| Raw `psql` / `pg_dump` migration shortcut | Classifier bash_patterns + hook denial | ✅ Works today |
-| Ad-hoc Python scripts bypassing migration tool | Hook scope excludes `Write` to `.py` files outside s1 | ✅ Works today |
-| Silent null violation (extracted ≠ loaded) | `verify_row_counts_match` | ✅ Works today |
-| Zombie container (multi-active deployments) | `verify_single_active_deployment` | ✅ Works today |
-| Audit trail for the ceremony | SQLite `audit_log` table | ✅ Works today (Level 1 integrity — not tamper-evident yet) |
+| Agent uses off-scope tool mid-step (e.g. `rm -rf`) | No hook to deny in real time | When mid-step side effects are unacceptable |
+| Agent uses `psql` when `cerebro-migrate` was sanctioned | Same — Tier 0 sees it in audit but doesn't block | When you want real-time prevention of path bypasses |
+| Adversarial agent forging sanctioned-tool output | Requires Tier 2 provenance | Regulated domain, external audit |
+
+**For most projects, the "does not prevent" list is acceptable** —
+the worst outcome is an audit-log finding that triggers a fix-and-
+retry. If that's not acceptable for a specific ceremony, add Tier 1
+for that ceremony only.
 
 ---
 
-## What this does NOT yet prevent
+## Tier 1 — add the hook (for high-stakes ceremonies only)
 
-Document these as future increments. Don't paper over them.
-
-| Gap | Mitigation today | Increment |
-|---|---|---|
-| Environment cross-wiring (DATABASE_URL pointing at wrong env) | `verify_env_isolation` exists but is stub-level; you need to submit `declared_env` and `database_url_env` manually | Future: wire verifier to read real DATABASE_URL via sanctioned env-reader tool |
-| Docker cache persistence | `verify_connector_registry` exists as stub; requires you to submit `connector_registry` manually | Future: verifier queries deploy logs directly |
-| Cryptographic provenance | None — today relies on tool scoping | Future: sanctioned tools emit signed attestations |
-| Human approval workflow for Ring 3 | Placeholder in schema only | Future: real approval tool + audit record |
-| Tamper-evident audit log | Level 1 (plain SQLite) | Future: Level 3 hash-chain; Level 4+ external publication |
-
-See [docs/CEREMONY_DB_MIGRATION.md](CEREMONY_DB_MIGRATION.md) for the
-full-fidelity target; the MVP above is a practical subset.
-
----
-
-## When to uninstall
-
-If the ceremony traps the agent in a state that's preventing
-legitimate work (e.g., you hit a new failure mode the runbook
-doesn't model), the deliberate escape is:
+Install when you want real-time denial instead of step-boundary
+detection:
 
 ```bash
-stepproof uninstall
+stepproof install --scope project
 ```
 
-That's the sanctioned exit. Reversible with a re-install. Logged.
-Leaves your repo clean.
+This writes `.claude/hooks/`, `.claude/settings.json` registrations,
+and the classification YAML. **Requires Claude Code restart.**
 
-Don't bypass the hook by editing `.claude/hooks/` directly — that
-defeats the point. If a ceremony is wrong, fix the ceremony. If
-StepProof itself is wrong, uninstall and file an issue.
+**What changes at Tier 1:**
+
+- Every tool call goes through the PreToolUse hook.
+- Off-scope tool calls are denied immediately, before they run.
+- `psql` is denied during a step where `cerebro-migrate` is the
+  sanctioned tool — not caught in audit, refused at the boundary.
+
+**What also changes** (honest about the cost):
+
+- Session is globally gated when a run is active. If the run is
+  stuck (bad runbook scope, test failure the agent can't fix
+  within the step's allowed_tools), the session is locked until
+  you resolve.
+- Recovery path when stuck: `stepproof uninstall` (deliberate,
+  logged, reversible). Fix the runbook. `stepproof install` again.
+  Restart Claude Code.
+- Runbook authoring takes more care — under-scoped `allowed_tools`
+  can trap the agent.
+
+**When Tier 1 is worth it:** specific ceremonies where the cost of
+an off-scope action is high and catching-after-the-fact is too
+late. Production deploys, schema migrations, financial posts.
+
+**When Tier 0 is enough:** everything else.
 
 ---
 
-## Customization checklist
+## Tier 2 — provenance (future)
 
-Before you ship the runbook for real use:
+Only `verify_round_marker` today. Provenance library is on the
+roadmap. See [docs/TIERS.md](TIERS.md) and
+[docs/research/09_provenance_and_signing.md](research/09_provenance_and_signing.md).
 
-- [ ] Replaced generic `cerebro-migrate` pattern with your actual
-      migration tool in `action_classification.yaml`.
-- [ ] Confirmed `psql` / `pg_dump` / `pg_restore` patterns are still
-      denied (if you use PostgreSQL) — or added equivalents for
-      MySQL / Mongo / Redis.
-- [ ] Decided how s2's row-count evidence is gathered for your
-      project. Pure schema changes: accept matching placeholders.
-      Data moves: wire to your ETL output.
-- [ ] Wrote a 2-sentence commit message format the agent should use
-      for migration commits — the audit log is only useful if the
-      commits are attributable.
-- [ ] Tested one full ceremony run end-to-end in staging before
-      trusting it in production.
-- [ ] Checked that `stepproof uninstall` works in your project
-      (if StepProof is ever broken, you need the escape working).
+---
+
+## Customizing for your stack
+
+### Migration tool
+
+Edit the runbook YAML. Replace references to `cerebro-migrate`
+with your actual tool. If you're at Tier 1, also update the
+classifier bash_patterns in `.claude/stepproof/action_classification.yaml`.
+
+Common substitutions:
+
+- **Alembic**: `alembic upgrade head`
+- **Supabase**: `supabase db push`
+- **Prisma**: `npx prisma migrate deploy`
+- **Flyway**: `flyway migrate`
+- **Django**: `manage.py migrate`
+
+### Deploy platform
+
+The `verify_single_active_deployment` verifier needs an
+`active_deployment_count`. How the agent gets that count is
+project-specific:
+
+- **Railway**: `railway deployments list | grep ACTIVE | wc -l`
+- **Kubernetes**: `kubectl get deployments -l app=mine -o name | wc -l`
+- **Vercel**: `vercel list --prod --json | jq '.deployments | length'`
+- **Fly.io**: `fly deploys list | grep running | wc -l`
+
+### Row-count source
+
+For data migrations, `verify_row_counts_match` needs
+`rows_extracted` and `rows_loaded`. These come from whatever ETL
+tooling you use. For pure schema changes, matching placeholders
+(both 0 or both null) are acceptable.
 
 ---
 
 ## Honest caveats
 
-- This is an **MVP**, not a production-hardened governance layer.
-  It catches the most common shortcuts; it does not catch
-  sophisticated ones.
-- The verifiers are **stub-level** for several checks. The real
-  enforcement is at the hook (tool-scope) layer. Plan for verifier
-  hardening in your own roadmap.
-- The audit log is **not tamper-evident** yet. If your
-  compliance environment requires append-only cryptographic
-  logs, this MVP is not sufficient. See
-  [docs/research/10_audit_tamper_evidence.md](research/10_audit_tamper_evidence.md).
-- You still need **human oversight** for Ring 3 production actions.
-  This MVP flags them; it does not handle the approval flow.
+- **Tier 0 is a real product**, but several verifiers are
+  stub-level (they validate evidence shape more than they read
+  deep external state). The stub still catches "agent claimed done
+  without fields" — which is the common failure.
+- **The audit log is Level 1 integrity** (plain SQLite).
+  Tamper-evident-at-write is a future increment. Today, an
+  attacker with access to the host can rewrite history.
+- **Human approval workflow** is placeholder in the schema.
+  Don't run Ring 3 production ceremonies without wiring your own
+  approval out-of-band.
+- **Per-harness adapters beyond Claude Code don't exist yet**.
+  Cursor, OpenAI Agents SDK — would need their own hook-equivalent
+  layer for Tier 1. Tier 0 works with any MCP-speaking harness.
 
-The value of this MVP is preventing the *obvious shortcuts* that
-cause the most common class of incidents. That's a real improvement
-over advisory controls, shippable today, without waiting for
-StepProof to reach its full architectural target.
+---
+
+## Recovery recipes
+
+### Run got stuck (Tier 1 mostly)
+
+The hook is refusing something the agent needs. The ceremony is
+wrong.
+
+```bash
+# Unstuck fast:
+stepproof uninstall             # disables hook
+rm -f .stepproof/active-run.json .stepproof/runtime.url
+
+# Edit the runbook in examples/ — widen the stuck step's allowed_tools
+#   so the agent has iteration room. Commit.
+
+stepproof install --scope project   # re-enable hook with new runbook
+# Restart Claude Code
+# Start a fresh run
+```
+
+### Run got stuck (Tier 0)
+
+Much easier. No hook is blocking anything; the run is just not
+advancing because the verifier is rejecting evidence.
+
+```bash
+# Inspect current state:
+sqlite3 .stepproof/runtime.db \
+  "SELECT current_step, status FROM workflow_runs WHERE run_id = '<your run_id>';"
+
+# Abandon the run (no CLI today; hit the HTTP endpoint):
+# See .stepproof/runtime.url for the URL, then POST /runs/<id>/abandon.
+# Fix the evidence and submit again, or declare a new plan.
+```
+
+### Clean slate
+
+```bash
+stepproof uninstall   # if Tier 1 is installed
+rm -rf .stepproof/    # wipes runtime state
+# Remove .mcp.json manually if you want StepProof off entirely
+```
+
+---
+
+## Customization checklist
+
+Before you use the runbook on real work:
+
+- [ ] At Tier 0 for first deployment (unless you're sure you need Tier 1).
+- [ ] Runbook customized for your migration / deploy tool.
+- [ ] At least one full ceremony run tested in staging before
+      production.
+- [ ] Audit-log query saved somewhere your compliance team can
+      run it.
+- [ ] Recovery recipe (above) practiced once before you need it in
+      anger.
+
+That's the tier-appropriate, pragmatic adoption path.

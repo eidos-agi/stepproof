@@ -270,6 +270,51 @@ and the operating mode this tool is built under.
 
 ---
 
+## Prevention is optional; evidence + audit is the core
+
+A late-stage realization worth naming: **the thesis holds without
+real-time prevention.** The core claim — *you cannot trust an agent
+to verify its own work; an independent system must recompute the
+claim against real state* — is satisfied by:
+
+1. Verifiers that read real state at step boundaries.
+2. An audit log recording every decision.
+
+The PreToolUse hook, which denies off-scope tool calls in real
+time, is a **hardening tier**, not the thesis.
+
+Most real deployments of StepProof will start without the hook —
+an agent declaring a plan via MCP, the runtime gating advancement
+on verifier-pass-against-real-state, and an audit log that satisfies
+post-hoc review. The agent *could* take an off-scope action between
+steps; the audit log would show it, and the next verifier often
+catches the consequence.
+
+The hook becomes necessary when the cost of a single off-scope
+action is unacceptable *before* it can be caught in the audit —
+production deploys, irreversible financial transactions, anything
+where "we caught it in the audit log the next day" is too late.
+
+This layering is documented in [docs/TIERS.md](TIERS.md):
+
+- **Tier 0** — MCP + verifier + audit log. Evidence-first. No hook.
+- **Tier 1** — add PreToolUse hook for real-time prevention.
+- **Tier 2** — add provenance (cryptographic attestation) for
+  sophisticated bypass resistance.
+
+Starting at Tier 0 is the honest adoption path. The hook
+introduces real friction (session-wide gating, restart required,
+catch-22 risk when runbooks are under-scoped); paying that cost
+before you need it tends to produce rejection of the whole tool.
+Teams that start at Tier 0, live with it, and add the hook only
+where they feel the gap — keep the tool. That's the operating mode
+the tool is optimized for.
+
+The philosophy doesn't need the hook. The thesis doesn't need the
+hook. Specific high-stakes ceremonies need the hook.
+
+---
+
 ## The honest limit
 
 The thesis is not that StepProof makes agents honest. It is that
