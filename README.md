@@ -215,6 +215,10 @@ Agent governance is becoming legally actionable. StepProof's architecture is des
 - [Keep Me Honest](docs/KEEP_ME_HONEST.md) — agent-declared plans as first-class runbooks
 - [Hook Integration](docs/HOOKS.md) — `PreToolUse` contract, exit codes
 
+### Using StepProof
+- **[Deploy to Your Project](docs/DEPLOY_TO_YOUR_PROJECT.md)** — 15-minute MVP guide. Install, customize for your migration tool, run your first real ceremony. Uses only verifiers that ship today.
+- [Run a Ceremony on This Repo](docs/RUN_A_CEREMONY.md) — the `rb-repo-simple` 3-step demo
+
 ### Testing & Verification
 - [Verification Matrix](docs/VERIFICATION_MATRIX.md) — the four levels; what each proves
 - [Dogfooding](docs/DOGFOODING.md) — this repo runs its own development cycle under StepProof via `rb-stepproof-dev`

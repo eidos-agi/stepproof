@@ -1,0 +1,108 @@
+# MVP migration + deploy runbook — practical starter for real projects.
+#
+# Uses only verifiers that ship today (even if some are stub-level).
+# The load-bearing protection is at the HOOK layer: allowed_tools
+# names the sanctioned migration tool and excludes raw psql. The
+# verifiers capture structured evidence and block advancement on
+# missing / incomplete claims.
+#
+# To adapt for your project:
+#
+#   1. Replace `cerebro-migrate` with your project's sanctioned
+#      migration tool (alembic, prisma, supabase-cli, flyway, etc.)
+#      in s1's allowed_tools.
+#   2. If your project uses a different deploy platform, replace
+#      the deploy-related bash patterns.
+#   3. If you need production migrations gated behind human
+#      approval, insert a Ring-3 approval step between s1 and s3
+#      (placeholder: `require_human_approval: true` — wire to your
+#      approval flow).
+#
+# What this runbook prevents today:
+#
+#   - Raw psql / pg_dump / pg_restore as a migration shortcut
+#     (hook denies; psql not in allowed_tools).
+#   - Ad-hoc Python scripts that import psycopg or equivalent
+#     (hook denies; Write to `.py` scripts not in s1's scope).
+#   - Silent-null-violation data loads
+#     (verify_row_counts_match rejects mismatched extracted/loaded).
+#   - Zombie-container scenarios where multiple deployments run in
+#     parallel (verify_single_active_deployment rejects >1 active).
+#
+# What this runbook does NOT yet prevent (future increments):
+#
+#   - Environment cross-wiring beyond the obvious (would use
+#     verify_env_isolation but wired against real DATABASE_URL).
+#   - Cryptographic provenance (today we rely on tool-scope; no
+#     attestation is verified).
+#   - Step-level approval workflow (placeholder only).
+
+template_id: rb-migration-deploy-mvp
+version: 1.0.0
+name: Migration + deploy — sanctioned tools only, evidence required
+description: >
+  Minimal production-shaped runbook that prevents the most common
+  migration-bypass failure modes (raw SQL shortcuts, ad-hoc Python
+  data loads, zombie containers, silent null violations). Uses only
+  verifiers that ship in StepProof today.
+risk_level: medium
+allowed_environments: [staging, production]
+
+steps:
+  - step_id: s1
+    description: Apply the migration via the sanctioned migration tool
+    # The load-bearing protection. Bash is allowed — but the
+    # classifier YAML catches psql, pg_dump, pg_restore at Ring 2
+    # and your project's bash_patterns should mark the sanctioned
+    # migration tool with a permissive classification. Here we
+    # assume `cerebro-migrate(-staging|-production)?` is
+    # project-specific; adapt for your tool.
+    allowed_tools:
+      - Read
+      - Grep
+      - Glob
+      - LS
+      - Bash
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [migration_name, deploy_id]
+    verification_method: verify_migration_applied
+    verification_tier: tier1
+    timeout_seconds: 1800
+    on_fail: retry
+    on_fail_max_retries: 2
+
+  - step_id: s2
+    description: Verify extracted vs loaded row counts match (no silent null loads)
+    # If this is a pure schema change with no data movement, skip
+    # this step or always submit matching counts. If it's a data
+    # migration, this is the gate that catches the Greenmark-class
+    # silent null violation — extracted=75, loaded=0.
+    allowed_tools:
+      - Read
+      - Grep
+      - Glob
+      - LS
+      - Bash
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [rows_extracted, rows_loaded]
+    verification_method: verify_row_counts_match
+    verification_tier: tier1
+    timeout_seconds: 600
+    on_fail: escalate_human
+
+  - step_id: s3
+    description: Confirm only one active deployment (no zombies)
+    # After a deploy, query the deploy platform for active-deployment
+    # count. If >1, a zombie is running old code against the same
+    # resources. The exact way you count deployments is platform-
+    # specific — the hook allows Bash so you can query your deploy
+    # platform's CLI / API.
+    allowed_tools:
+      - Read
+      - Bash
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [active_deployment_count, deploy_id]
+    verification_method: verify_single_active_deployment
+    verification_tier: tier1
+    timeout_seconds: 600
+    on_fail: escalate_human
