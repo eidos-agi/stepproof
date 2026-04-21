@@ -45,10 +45,10 @@ complex2 *ARGS:
 level4 *ARGS:
     uv run python scripts/e2e_level4.py {{ARGS}}
 
-# bypass replay — real Claude Code session re-enacting Incident 1/3 of the
-# case study. Proves StepProof stops the migration-bypass pattern.
-removed *ARGS:
-    uv run python scripts/e2e_removed.py {{ARGS}}
+# Migration-bypass replay — real Claude Code session enacting the raw-psql
+# shortcut pattern. Proves StepProof stops the bypass.
+bypass *ARGS:
+    uv run python scripts/e2e_bypass.py {{ARGS}}
 
 # Blind trap — realistic task where the agent doesn't know the hook will fire
 # until it reaches for a scoped-out tool during normal work.
@@ -56,7 +56,7 @@ blind *ARGS:
     uv run python scripts/e2e_blind_trap.py {{ARGS}}
 
 # All smokes. Level-4-class tests are last because they invoke `claude -p`.
-all-smokes: e2e e2e2 complex1 complex2 level4 removed blind
+all-smokes: e2e e2e2 complex1 complex2 level4 bypass blind
 
 # List registered runbook templates (requires runtime running).
 runbooks:
@@ -73,3 +73,14 @@ lint:
 # Format.
 fmt:
     uv run ruff format .
+
+# Rebuild chart PNGs from the Mermaid sources in charts/src/.
+charts:
+    #!/usr/bin/env bash
+    set -e
+    mkdir -p charts/rendered
+    for f in charts/src/*.mmd; do
+        name=$(basename "$f" .mmd)
+        echo "rendering $name"
+        npx -y -p @mermaid-js/mermaid-cli mmdc -i "$f" -o "charts/rendered/$name.png" -w 1400 -b white
+    done

@@ -1,9 +1,8 @@
 # "Keep Me Honest" — Agent-Declared Plans as First-Class Runbooks
 
-> "The agent had every tool it needed. It had guardrails, a trilogy, topology documentation, incident logs, and deploy ceremonies. It ignored all of them under pressure."
-> — [Case Study: one observed session](CASE_STUDY.md)
+> The agent had every tool it needed — guardrails, topology docs, incident logs, deploy ceremonies — and ignored all of them under pressure.
 
-The an observed session is the canonical "keep me honest" failure. The agent had a coherent plan at the start (apply migration → deploy → verify → trigger extraction → check row counts). It drifted from that plan under pressure — raw `psql` instead of migration tooling, ad-hoc scripts instead of the daemon — and spent 11 hours debugging the consequences. If the agent had **bound itself to its own declared plan** at hour zero, each drift would have hit a gate. That's the pattern this doc describes.
+The canonical "keep me honest" failure looks like this: the agent has a coherent plan at the start (apply migration → deploy → verify → trigger extraction → check row counts). It drifts from that plan under pressure — raw `psql` instead of migration tooling, ad-hoc scripts instead of the daemon — and spends hours debugging the consequences. If the agent had **bound itself to its own declared plan** at hour zero, each drift would have hit a gate. That's the pattern this doc describes.
 
 ## The Reframing
 

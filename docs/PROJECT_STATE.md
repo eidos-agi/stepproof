@@ -33,7 +33,7 @@ The user-level install never writes to a project. The per-project `.stepproof/` 
 | MCP server binary | ✅ | |
 | Daemon process | ✅ | |
 | Built-in runbook library (the 8 toys) | ✅ | |
-| Project-specific runbook (e.g., `rb-example-deploy`) | | ✅ |
+| Project-specific runbook (e.g., `rb-<project>-deploy`) | | ✅ |
 | Classification overrides (what does `Bash: terraform apply` mean *here*?) | | ✅ |
 | Active session → run mapping | | ✅ |
 | Audit log (authoritative, long-term) | ✅ (shared DB) | |

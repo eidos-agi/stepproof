@@ -2,7 +2,7 @@
 
 The smoke tests prove plumbing. They do not prove StepProof works on real workers in real environments. This doc works through the three hardest seams honestly.
 
-The [case study](CASE_STUDY.md) is the concrete shape of what goes wrong when these seams aren't closed: environment cross-wiring (classification failure), raw-psql bypass (action-classification failure), silent null violations (evidence-freshness failure), zombie containers persisting old code (topology-awareness failure). Each section below references the case study when the seam maps to a specific the case study incident.
+Real observed sessions show the concrete shape of what goes wrong when these seams aren't closed: environment cross-wiring (classification failure), raw-psql bypass (action-classification failure), silent null violations (evidence-freshness failure), zombie containers persisting old code (topology-awareness failure).
 
 ## 1. Action Classification — The Bedrock
 

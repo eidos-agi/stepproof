@@ -28,7 +28,7 @@ Microsoft open-sourced the Agent Governance Toolkit (AGT) in April 2026. It's th
 
 ## Why StepProof for Us Specifically
 
-1. **Our problem is specific.** The [an observed session](CASE_STUDY.md) is a Claude-Code-agent-in-Python workflow where the agent drifted from its own plan under pressure. AGT solves the *general* agent-governance problem. StepProof solves *that problem*, with primitives that name exactly what went wrong: runbook, step, evidence, verifier, declared plan, amendment.
+1. **Our problem is specific.** It's the Claude-Code-agent-in-Python workflow where the agent drifts from its own plan under pressure. AGT solves the *general* agent-governance problem. StepProof solves *that problem*, with primitives that name exactly what went wrong: runbook, step, evidence, verifier, declared plan, amendment.
 2. **Our integration surface is narrow and critical.** Claude Code + MCP is our stack. AGT doesn't support it. We'd build that adapter either way — as a first-class product in StepProof, or a second-class citizen inside AGT. First-class wins.
 3. **Our surface area is small.** One engineer, AI-assisted, in a small number of repos. A 7-package platform with 9,500 tests is a maintenance surface we don't have capacity for. StepProof's ~1,500 LOC is tractable.
 4. **"Keep me honest" is genuinely different.** AGT enforces policy that the agent didn't author. StepProof enforces contracts the agent authored. Different failure mode, different UX, different value proposition. That's not a feature we can retrofit onto AGT — it's a different product shape.

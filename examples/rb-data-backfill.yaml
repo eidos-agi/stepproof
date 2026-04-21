@@ -1,6 +1,6 @@
 # ETL data backfill runbook. Runs a backfill job, verifies row counts match,
-# updates downstream aggregates. Classic observed-session-style silent-null-violation
-# territory — the row-count verifier is non-negotiable.
+# updates downstream aggregates. Classic silent-null-violation territory —
+# the row-count verifier is non-negotiable.
 
 template_id: rb-data-backfill
 version: 1.0.0

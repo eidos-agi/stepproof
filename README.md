@@ -20,7 +20,7 @@ For software teams increasingly relying on agents to complete multi-step workflo
 
 Three reasons advisory controls don't solve this:
 
-1. **Instructions can be ignored.** `CLAUDE.md`, memory, system prompts, runbook docs — the agent reads them, and when the sanctioned tool fails or feels tedious, takes a faster path. [one observed session](docs/CASE_STUDY.md) is one engineer-day of this: migration applied via raw `psql`, develop pointed at production via a mis-set `DATABASE_URL`, ad-hoc Python script loading data with no provenance, zombie container eating every job for hours. Every one of these was an agent choosing efficiency over ceremony.
+1. **Instructions can be ignored.** `CLAUDE.md`, memory, system prompts, runbook docs — the agent reads them, and when the sanctioned tool fails or feels tedious, takes a faster path. The pattern repeats across real sessions: migrations applied via raw `psql` instead of the migration tool, develop environments pointed at production via mis-set `DATABASE_URL`, ad-hoc Python scripts loading data with no provenance, zombie containers eating jobs for hours. Every one is an agent choosing efficiency over ceremony.
 
 2. **Hooks alone are too narrow.** Claude Code's `PreToolUse` hook can block a single command. It cannot enforce "step 3 requires evidence from step 2." It has no notion of a bound plan, no verifier, no audit log. You can deny `psql` and the agent writes a Python script that uses `psycopg`. Whack-a-mole.
 
@@ -28,18 +28,9 @@ Three reasons advisory controls don't solve this:
 
 ### The cost of non-determinism — one observed session, in hours
 
-```mermaid
-pie showData
-    title "11 preventable hours across 6 incidents — all from the same failure class"
-    "Zombie container (wrong-DB extraction)" : 3
-    "Docker cache persistence (stale code)" : 2.5
-    "Migration bypass (raw psql)" : 2
-    "Env cross-wiring (develop → prod DB)" : 1.5
-    "Ad-hoc Python load (no provenance)" : 1
-    "Entity null violation (silent 0 rows)" : 1
-```
+![11 preventable hours across 6 incidents — all from the same failure class](charts/rendered/incident-cost.png)
 
-Each slice is an agent choosing efficiency over ceremony. Every one maps to a specific verifier StepProof would have run. Full breakdown in [Case Study: the case study](docs/CASE_STUDY.md).
+Six incidents, one session, one failure class: an agent choosing efficiency over ceremony. Each slice maps to a specific verifier StepProof would have run.
 
 What's missing is a **runtime that forces ceremony**. Not a suggestion. Not a nudge. A system that makes the shortcut structurally unavailable.
 
@@ -51,14 +42,7 @@ One experiment captures the thesis. We built a 15-round guessing game exposed as
 
 ### Outcome — real Claude Code sessions, measured by ground truth
 
-```mermaid
-xychart-beta
-    title "Rounds actually completed (out of 15) by prompt + enforcement"
-    x-axis ["vague: 'be efficient'", "reward: '+20% for stopping at 7'"]
-    y-axis "Rounds completed (ground truth)" 0 --> 15
-    bar "WITHOUT StepProof" [6, 15]
-    bar "WITH StepProof"    [15, 15]
-```
+![Rounds actually completed out of 15, by prompt × enforcement](charts/rendered/outcome-2x2.png)
 
 The verdict behind each bar:
 
@@ -69,23 +53,11 @@ The verdict behind each bar:
 
 The bottom-right cell is the proof. Claude had every incentive to shortcut. It tried. The hook denied every off-plan tool; the `verify_round_marker` verifier demanded real per-step markers written only by correct guesses; the run advanced only on real evidence. End state: 15/15, `COMPLETED`.
 
-The bottom-left cell is the real-world failure StepProof prevents. Given just *"be efficient,"* baseline Claude drifted — not out of malice, out of interpretation. That drift is the drift pattern. In production, without StepProof, that drift is how agents cause 11-hour incidents.
+The bottom-left cell is the real-world failure StepProof prevents. Given just *"be efficient,"* baseline Claude drifted — not out of malice, out of interpretation. In production, without StepProof, that drift is how agents cause multi-hour incidents.
 
 ### Why determinism matters — the drift problem visualized
 
-```mermaid
-flowchart LR
-    A[Agent receives task] --> B{What does 'complete' mean?}
-    B -->|"baseline Claude,<br/>vague prompt"| C[Stops at round 6/15<br/>Reports 'game complete']
-    B -->|"under StepProof,<br/>same prompt"| D[Plan declared: 15 steps]
-    D --> E[Each step requires<br/>verify_round_marker]
-    E --> F[Marker file only exists<br/>if round was actually solved]
-    F --> G[Agent cannot advance<br/>without real evidence]
-    G --> H[15/15 completed]
-
-    style C fill:#ffcccc,stroke:#cc0000,color:#000
-    style H fill:#ccffcc,stroke:#008800,color:#000
-```
+![Why determinism matters: baseline Claude drifts to 6/15; StepProof forces real evidence at every step](charts/rendered/drift-flow.png)
 
 Without a deterministic check, "done" is whatever the agent decides it means — and agents decide pragmatically when no system argues back. StepProof replaces interpretation with a verifier reading ground truth. It's the same shape as "a CI pipeline doesn't merge your PR because you claim tests pass; it merges because it ran the tests."
 
@@ -94,7 +66,7 @@ Full matrix, reproducible against a real `claude -p` session:
 ```bash
 just test           # Level 1 smoke (131) + Level 2 integration (14)
 just level4         # Level 4 — real Claude Code session, installed hook, verifier
-just removed      # Migration-bypass anti-pattern replay
+just bypass         # Migration-bypass anti-pattern replay
 just blind          # Hook fires on ordinary work the agent wasn't expecting
 uv run python challenges/colder_warmer/compare.py  # the 2×2 above
 ```
@@ -118,61 +90,11 @@ time      action_type                             policy                       r
 
 ### Three roles, no trust between them
 
-```mermaid
-flowchart TB
-    W["<b>Worker (Agent)</b><br/>Full tool access<br/>Executes, submits evidence<br/>Cannot self-verify"]
-    G["<b>Governor</b><br/>Intercepts every tool call<br/>Enforces plan scope<br/>Records every decision"]
-    C["<b>Control Plane</b><br/>Plan + run state<br/>Step transitions<br/>Tamper-evident audit log"]
-    V["<b>Verifier (read-only)</b><br/>Checks evidence<br/>against real state<br/>Returns pass/fail"]
-
-    W -->|proposed action| G
-    G -->|allow / deny| W
-    W -->|claims step complete<br/>+ evidence| C
-    C -->|dispatch| V
-    V -->|pass/fail| C
-    C -->|advance or block| W
-
-    style W fill:#e8f0ff,stroke:#2060d0,color:#000
-    style G fill:#fff3cd,stroke:#aa7700,color:#000
-    style C fill:#f0e8ff,stroke:#6020d0,color:#000
-    style V fill:#e8ffe8,stroke:#00aa00,color:#000
-```
+![Four-role architecture: worker, governor, control plane, verifier](charts/rendered/three-roles.png)
 
 ### A single step, from claim to advancement
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Agent as Worker (Agent)
-    participant Hook as Governor (Hook)
-    participant Runtime as Control Plane
-    participant Verifier
-
-    Agent->>Hook: Tool call (e.g. Bash, Edit, MCP)
-    Hook->>Hook: Read active-run.json<br/>Check allowed_tools
-    alt tool not in plan's allowed_tools
-        Hook-->>Agent: exit 2 + stderr denial
-        Note over Agent: Agent cannot escape scope
-    else tool allowed
-        Hook->>Runtime: /policy/evaluate
-        Runtime-->>Hook: allow
-        Hook-->>Agent: exit 0
-        Agent->>Agent: does the work
-    end
-
-    Agent->>Runtime: step_complete(evidence)
-    Runtime->>Verifier: dispatch(verification_method, evidence, context)
-    Verifier->>Verifier: read real state<br/>(file, DB, git, API)
-    alt evidence matches reality
-        Verifier-->>Runtime: pass
-        Runtime->>Runtime: Advance step<br/>Update active-run.json<br/>Append to audit log
-        Runtime-->>Agent: next step unlocked
-    else evidence does not match
-        Verifier-->>Runtime: fail
-        Runtime->>Runtime: Mark step failed<br/>Do not advance<br/>Append to audit log
-        Runtime-->>Agent: run stuck; evidence rejected
-    end
-```
+![Step sequence: tool call → hook checks scope → policy eval → step_complete → verifier → advance or block](charts/rendered/step-sequence.png)
 
 The numbered steps are the only way the run advances. There is no path around them — the agent's allowed_tools prevents off-plan actions, the verifier runs against reality not claims, the audit log records every decision by a process the agent doesn't control.
 
@@ -246,7 +168,7 @@ Four levels of testing, each proving different things. Running each is cheap.
 | 1 — Smoke | `just smoke` | 131 unit-level tests; classifier, validation, installer, MCP loop |
 | 2 — Integration | `just integration` | 14 subprocess tests; lifecycle, signal handling, corruption resilience, policy enforcement |
 | 3 — E2E (source) | `just e2e` / `e2e2` / `complex1` / `complex2` | Installed hook + live runtime exercised by Python harness |
-| 4 — Real Claude Code | `just level4` / `removed` / `blind` | Real `claude -p` session; Claude spawns the MCP, fires the hook, reads the block, adapts |
+| 4 — Real Claude Code | `just level4` / `bypass` / `blind` | Real `claude -p` session; Claude spawns the MCP, fires the hook, reads the block, adapts |
 
 Details in [Verification Matrix](docs/VERIFICATION_MATRIX.md) — what each level proves and doesn't.
 
@@ -293,7 +215,6 @@ Agent governance is becoming legally actionable. StepProof's architecture is des
 - [Lessons from `claude-code-hooks-mastery`](docs/LESSONS_FROM_HOOKS_MASTERY.md) — hook idioms
 
 ### Context
-- [Case Study: one observed session](docs/CASE_STUDY.md) — the 11-hour incident this exists to prevent
 - [OWASP Agentic AI Top 10 Mapping](docs/OWASP_MAPPING.md) — per-risk coverage
 - [Positioning vs Microsoft AGT](docs/POSITIONING.md) — where we overlap and differ
 - [Prior Art](docs/PRIOR_ART.md) / [Deeper Dive](docs/PRIOR_ART_DEEPER.md)

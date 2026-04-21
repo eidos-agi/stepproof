@@ -87,7 +87,7 @@ The hook caches nothing across invocations — each run reads fresh. At <10 KB t
 
 The adapter ships an `action_classification.yaml` that maps Claude Code tools to `action_type` + `ring`.
 
-The [case study](CASE_STUDY.md) is the concrete demand: the adapter needs enough context to classify "set Railway `DATABASE_URL`" as a production-cross-wiring action (Ring 3, deny without topology check), classify "run `psql` against prod" as a migration-bypass action (Ring 3, deny with `cerebro-migrate` suggestion), and classify "run an ad-hoc Python script that imports psycopg" as an unsanctioned-write (Ring 3, deny). A table of tool names alone is insufficient; the classification needs topology awareness.
+The concrete demand: the adapter needs enough context to classify "set Railway `DATABASE_URL`" as a production-cross-wiring action (Ring 3, deny without topology check), classify "run `psql` against prod" as a migration-bypass action (Ring 3, deny with sanctioned-tool suggestion), and classify "run an ad-hoc Python script that imports psycopg" as an unsanctioned-write (Ring 3, deny). A table of tool names alone is insufficient; the classification needs topology awareness.
 
 ```yaml
 tools:

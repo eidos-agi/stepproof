@@ -1,7 +1,8 @@
-# the case study-specific runbook: deploy a new vendor connector (Fleetio) to
-# the data-daemon pipeline. Modeled directly on Session 34 (see
-# docs/CASE_STUDY.md). Each step maps to a the case study incident
-# StepProof would have caught.
+# Example runbook: deploy a new vendor connector (Fleetio) to a data
+# pipeline. Modeled on a real observed session where the agent bypassed
+# the migration tool, cross-wired environments, and left zombie
+# containers running old code. Each step maps to an incident StepProof
+# would have caught.
 
 template_id: rb-fleetio-connector-deploy
 version: 1.0.0

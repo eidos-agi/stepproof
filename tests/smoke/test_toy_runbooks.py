@@ -113,7 +113,7 @@ async def test_fleetio_connector_happy_path_s1(client: httpx.AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_row_count_verifier_catches_removed_incident_5(client: httpx.AsyncClient):
+async def test_row_count_verifier_catches_silent_null_violation(client: httpx.AsyncClient):
     """Verifier must fail when rows_loaded != rows_extracted (silent null violation)."""
     r = await client.post(
         "/runs",
@@ -132,7 +132,7 @@ async def test_row_count_verifier_catches_removed_incident_5(client: httpx.Async
                            "job_id": "job1", "vendor": "fleetio", "table": "vehicles"}},
     )
 
-    # s2 with mismatched rows (observed-session-style): extracted=75, loaded=0.
+    # s2 with mismatched rows (silent null violation): extracted=75, loaded=0.
     r = await client.post(
         f"/runs/{run_id}/steps/s2/complete",
         json={"evidence": {"rows_extracted": 75, "rows_loaded": 0}},
@@ -140,11 +140,11 @@ async def test_row_count_verifier_catches_removed_incident_5(client: httpx.Async
     assert r.status_code == 200
     result = r.json()["verification_result"]
     assert result["status"] == "fail"
-    assert "mismatch" in result["reason"].lower() or "removed" in result["reason"].lower()
+    assert "mismatch" in result["reason"].lower()
 
 
 @pytest.mark.asyncio
-async def test_zombie_detector_catches_removed_incident_4(client: httpx.AsyncClient):
+async def test_zombie_detector_catches_multi_active_deployment(client: httpx.AsyncClient):
     r = await client.post(
         "/runs",
         json={
@@ -178,7 +178,7 @@ async def test_zombie_detector_catches_removed_incident_4(client: httpx.AsyncCli
 
 
 @pytest.mark.asyncio
-async def test_env_isolation_catches_removed_incident_2(client: httpx.AsyncClient):
+async def test_env_isolation_catches_env_cross_wiring(client: httpx.AsyncClient):
     r = await client.post(
         "/runs",
         json={

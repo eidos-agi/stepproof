@@ -1,0 +1,17 @@
+flowchart TB
+    W["<b>Worker (Agent)</b><br/>Full tool access<br/>Executes, submits evidence<br/>Cannot self-verify"]
+    G["<b>Governor</b><br/>Intercepts every tool call<br/>Enforces plan scope<br/>Records every decision"]
+    C["<b>Control Plane</b><br/>Plan + run state<br/>Step transitions<br/>Tamper-evident audit log"]
+    V["<b>Verifier (read-only)</b><br/>Checks evidence<br/>against real state<br/>Returns pass/fail"]
+
+    W -->|proposed action| G
+    G -->|allow / deny| W
+    W -->|claims step complete<br/>+ evidence| C
+    C -->|dispatch| V
+    V -->|pass/fail| C
+    C -->|advance or block| W
+
+    style W fill:#e8f0ff,stroke:#2060d0,color:#000
+    style G fill:#fff3cd,stroke:#aa7700,color:#000
+    style C fill:#f0e8ff,stroke:#6020d0,color:#000
+    style V fill:#e8ffe8,stroke:#00aa00,color:#000

@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    participant Agent as Worker (Agent)
+    participant Hook as Governor (Hook)
+    participant Runtime as Control Plane
+    participant Verifier
+
+    Agent->>Hook: Tool call (e.g. Bash, Edit, MCP)
+    Hook->>Hook: Read active-run.json<br/>Check allowed_tools
+    alt tool not in plan's allowed_tools
+        Hook-->>Agent: exit 2 + stderr denial
+        Note over Agent: Agent cannot escape scope
+    else tool allowed
+        Hook->>Runtime: /policy/evaluate
+        Runtime-->>Hook: allow
+        Hook-->>Agent: exit 0
+        Agent->>Agent: does the work
+    end
+
+    Agent->>Runtime: step_complete(evidence)
+    Runtime->>Verifier: dispatch(verification_method, evidence, context)
+    Verifier->>Verifier: read real state<br/>(file, DB, git, API)
+    alt evidence matches reality
+        Verifier-->>Runtime: pass
+        Runtime->>Runtime: Advance step<br/>Update active-run.json<br/>Append to audit log
+        Runtime-->>Agent: next step unlocked
+    else evidence does not match
+        Verifier-->>Runtime: fail
+        Runtime->>Runtime: Mark step failed<br/>Do not advance<br/>Append to audit log
+        Runtime-->>Agent: run stuck — evidence rejected
+    end

@@ -170,7 +170,7 @@ async def verify_secret_rotated(
 async def verify_row_counts_match(
     evidence: dict[str, Any], context: dict[str, Any]
 ) -> dict[str, Any]:
-    """silent-null-violation incident — verify rows_loaded == rows_extracted per table."""
+    """Silent null violation detector — verify rows_loaded == rows_extracted per table."""
     extracted = evidence.get("rows_extracted")
     loaded = evidence.get("rows_loaded")
     if extracted is None or loaded is None:
@@ -187,7 +187,7 @@ async def verify_row_counts_match(
         }
     return {
         "status": "fail",
-        "reason": f"Row count mismatch: {l} loaded vs {e} extracted (observed-session-style silent null violation).",
+        "reason": f"Row count mismatch: {l} loaded vs {e} extracted — silent null violation.",
         "artifacts": {"rows_extracted": e, "rows_loaded": l},
     }
 
@@ -196,7 +196,7 @@ async def verify_row_counts_match(
 async def verify_single_active_deployment(
     evidence: dict[str, Any], context: dict[str, Any]
 ) -> dict[str, Any]:
-    """zombie-container incident — zombie container detection."""
+    """Zombie container detection — multiple active deployments at once."""
     active_count = evidence.get("active_deployment_count")
     deploy_id = evidence.get("deploy_id")
     if active_count is None or deploy_id is None:
@@ -212,7 +212,7 @@ async def verify_single_active_deployment(
         }
     return {
         "status": "fail",
-        "reason": f"{n} active deployments detected; zombie risk (observed-session-style).",
+        "reason": f"{n} active deployments detected; zombie container risk.",
     }
 
 
@@ -220,7 +220,7 @@ async def verify_single_active_deployment(
 async def verify_connector_registry(
     evidence: dict[str, Any], context: dict[str, Any]
 ) -> dict[str, Any]:
-    """docker-cache-persistence incident — verify the deployed code contains the expected connector."""
+    """Docker cache persistence detector — verify the deployed code contains the expected connector."""
     expected = evidence.get("expected_connector")
     registry = evidence.get("connector_registry")  # e.g., ["sage_intacct", "fleetio"]
     if not expected or registry is None:
@@ -238,7 +238,7 @@ async def verify_connector_registry(
         "status": "fail",
         "reason": (
             f"Connector {expected!r} missing from deployed registry {registry_list} "
-            "(observed-session-style Docker cache persistence)."
+            "— Docker cache persistence suspected."
         ),
     }
 
@@ -247,7 +247,7 @@ async def verify_connector_registry(
 async def verify_env_isolation(
     evidence: dict[str, Any], context: dict[str, Any]
 ) -> dict[str, Any]:
-    """env-cross-wiring incident — environment cross-wiring detection."""
+    """Environment cross-wiring detection — declared env vs DATABASE_URL topology."""
     declared_env = evidence.get("declared_env")  # "staging" or "production"
     database_url_env = evidence.get("database_url_env")  # resolves to same
     if not declared_env or not database_url_env:
@@ -264,7 +264,7 @@ async def verify_env_isolation(
         "status": "fail",
         "reason": (
             f"Environment cross-wiring: declared={declared_env} but DATABASE_URL resolves "
-            f"to {database_url_env} (env-cross-wiring incident)."
+            f"to {database_url_env} — env cross-wiring."
         ),
     }
 

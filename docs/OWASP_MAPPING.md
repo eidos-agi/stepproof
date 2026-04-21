@@ -26,7 +26,7 @@ This is StepProof's answer, honest about coverage level and phase.
 
 ## Why This Mapping Isn't Vanity
 
-Every OWASP category points at a class of real incidents. The an observed session ([CASE_STUDY.md](CASE_STUDY.md)) exemplified several simultaneously:
+Every OWASP category points at a class of real incidents. One real observed session exemplified several simultaneously:
 
 - Ad-hoc `psql` + ad-hoc Python script execution → **#2 Tool misuse** and **#5 Code execution**
 - Environment cross-wiring to production DB while agent thought it was in develop → **#1 Goal hijacking** (agent executing against wrong target)
