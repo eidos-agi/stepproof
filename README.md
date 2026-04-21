@@ -221,9 +221,10 @@ Agent governance is becoming legally actionable. StepProof's architecture is des
 - [Lessons from `claude-code-hooks-mastery`](docs/LESSONS_FROM_HOOKS_MASTERY.md) — hook idioms
 
 ### Context
+- **[Research Corpus](docs/research/)** — 19-doc landscape analysis: training-time alignment, tool-use constraints, workflow engines, multi-agent supervisors, guardrails, enterprise AI gateways, policy-as-code, provenance/signing, audit tamper-evidence, formal methods, standards (OWASP/NIST/ISO), regulation (EU/Colorado), positioning, the specific assembled gap, competitive watch, known unknowns
 - [OWASP Agentic AI Top 10 Mapping](docs/OWASP_MAPPING.md) — per-risk coverage
 - [Positioning vs Microsoft AGT](docs/POSITIONING.md) — where we overlap and differ
-- [Prior Art](docs/PRIOR_ART.md) / [Deeper Dive](docs/PRIOR_ART_DEEPER.md)
+- [Prior Art](docs/PRIOR_ART.md) / [Deeper Dive](docs/PRIOR_ART_DEEPER.md) — earlier prior-art notes (superseded by the research corpus above)
 - [Architecture Decision Records](docs/adr/) — numbered, dated, immutable
 - [Open Questions](docs/OPEN_QUESTIONS.md) — the three hardest seams
 
