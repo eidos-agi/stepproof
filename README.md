@@ -2,17 +2,17 @@
 
 **AI is trained to complete the mission, not follow exact instructions.**
 
-And while Claude Code is a smart harness, the harness hasn't yet overcome RL biases baked into the models — biases that allow models to take shortcuts and disregard instructions.
+And while Claude Code is a smart harness, the harness hasn't yet overcome RL biases baked into the models — biases that let models take shortcuts and disregard instructions.
 
-**StepProof is a tool we've built to force AI agents to follow regulations, follow steps, and to tell the truth.**
+**StepProof is the enforcement layer on which regulation-compliant, ceremony-bound agent workflows can actually be enforced.** It forces an agent to stay inside a declared plan, produce evidence at every step, and submit that evidence to an independent verifier before it's allowed to advance. The verifier reads real system state, not the agent's claim.
 
-StepProof was inspired partly by the [OWASP Agentic AI Top 10](docs/OWASP_MAPPING.md) (Dec 2025). Regulatory frameworks in the EU (AI Act, Aug 2026), Colorado (AI Act, Jun 2026), and elsewhere require governance — something AI companies haven't kept up with. StepProof was also partly inspired by **ARC-AGI-3**, which requires both optimal completion times *and* sequential integrity.
+StepProof was inspired partly by the [OWASP Agentic AI Top 10](docs/OWASP_MAPPING.md) (Dec 2025). Regulatory frameworks in the EU (AI Act, Aug 2026), Colorado (AI Act, Jun 2026), and elsewhere require governance primitives — declared plans, verifier-gated advancement, tamper-evident audit logs — that current AI deployments don't provide. StepProof was also partly inspired by **ARC-AGI-3**, which grades agents on both optimal completion *and* sequential integrity. StepProof itself doesn't encode any specific regulation; it provides the primitives a runbook author uses to encode one.
 
-Below, you can see that Claude Code will cheat and skip steps without StepProof. With StepProof, it's not possible to cheat.
+Below, you can see that Claude Code will skip steps and falsely claim completion on ambiguous prompts, without StepProof. **With StepProof and appropriately-designed verifiers, the shortcut is structurally unavailable** — the plan denies off-scope tools, the verifier denies unearned advancement. Weak verifiers produce weak enforcement; semantically-specific verifiers produce the guarantee.
 
-The practical implication: agents that follow regulations, rules, ceremony, and which cannot take shortcuts. Imagine a complex, plain-English release cycle that an agent actually follows — every step, in order, with evidence, auditable after the fact.
+The practical implication: agents that stay inside the plan they declared, cannot falsely claim work they didn't do, and produce an audit trail an outside auditor can verify. Imagine a complex, plain-English release cycle that an agent actually follows — every step, in order, with evidence, auditable after the fact.
 
-For software teams increasingly relying on agents to complete multi-step workflows via skills files, truthfulness in execution is a major existing gap. We believe StepProof is not just a small step, but a leap forward in agentic engineering.
+For software teams increasingly relying on agents to complete multi-step workflows via skills files, truthfulness in execution is a major existing gap. The paired with/without experiments documented in this repo make the gap measurable. StepProof is a step change in how agent execution is verified — and the evidence below is what backs the claim.
 
 ---
 
