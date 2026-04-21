@@ -304,6 +304,143 @@ async def verify_file_exists(evidence: dict[str, Any], context: dict[str, Any]) 
     }
 
 
+@register("verify_git_commit", Tier.TIER1)
+async def verify_git_commit(
+    evidence: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    """Verify a commit SHA exists in the current repository.
+
+    Real evidence for "code was committed." The agent cannot fake a SHA —
+    only ``git commit`` produces one that ``git cat-file -t`` resolves.
+
+    Evidence schema:
+        commit_sha: str — the full or abbreviated SHA to verify.
+        repo_path: str — optional; defaults to current working directory.
+        expected_subject_contains: str — optional; if set, the commit's
+            subject line must contain this substring.
+    """
+    import shutil
+    import subprocess
+
+    sha = evidence.get("commit_sha")
+    if not sha or not isinstance(sha, str):
+        return {"status": "fail", "reason": "Missing or non-string commit_sha."}
+
+    repo = evidence.get("repo_path") or "."
+    if shutil.which("git") is None:
+        return {"status": "fail", "reason": "git binary not on PATH."}
+
+    try:
+        r = subprocess.run(
+            ["git", "-C", repo, "cat-file", "-t", sha],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except subprocess.SubprocessError as e:
+        return {"status": "fail", "reason": f"git cat-file failed: {e}"}
+    if r.returncode != 0 or r.stdout.strip() != "commit":
+        return {
+            "status": "fail",
+            "reason": f"SHA {sha!r} is not a commit in {repo!r}: {r.stderr.strip() or r.stdout.strip()}",
+        }
+
+    resolved = subprocess.run(
+        ["git", "-C", repo, "rev-parse", sha],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    ).stdout.strip()
+
+    expected_subj = evidence.get("expected_subject_contains")
+    if expected_subj:
+        subj = subprocess.run(
+            ["git", "-C", repo, "log", "-1", "--format=%s", resolved],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+        if expected_subj not in subj:
+            return {
+                "status": "fail",
+                "reason": (
+                    f"Commit {resolved[:8]} subject {subj!r} "
+                    f"does not contain {expected_subj!r}"
+                ),
+            }
+
+    return {
+        "status": "pass",
+        "reason": f"Commit {resolved[:8]} verified in {repo!r}.",
+        "artifacts": {"commit_sha": resolved},
+    }
+
+
+@register("verify_pytest_passed", Tier.TIER1)
+async def verify_pytest_passed(
+    evidence: dict[str, Any], context: dict[str, Any]
+) -> dict[str, Any]:
+    """Verify a pytest output file shows a passing suite.
+
+    The agent captures pytest's stdout to a file, submits the path, and
+    the verifier parses the summary line. Agent cannot fabricate this
+    without running the tests, because pytest's summary format is
+    specific (``N passed[, M failed][, ...] in S.Ss``) and includes a
+    wall-time reading.
+
+    Evidence schema:
+        pytest_output_path: str — path to captured pytest output.
+        min_passed: int — minimum passing tests required (default 1).
+    """
+    import re
+    from pathlib import Path
+
+    path = evidence.get("pytest_output_path")
+    if not path:
+        return {"status": "fail", "reason": "Missing pytest_output_path."}
+    p = Path(path).expanduser()
+    if not p.exists() or not p.is_file():
+        return {"status": "fail", "reason": f"pytest output file not found: {path}"}
+
+    try:
+        text = p.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        return {"status": "fail", "reason": f"Could not read pytest output: {e}"}
+
+    # Pytest's summary line: "=== 145 passed in 12.34s ===", sometimes with
+    # warnings/skips. Require 'passed' and no 'failed' / 'error'.
+    summary_line = None
+    for line in text.splitlines()[::-1]:
+        if "passed" in line and "=" in line:
+            summary_line = line
+            break
+    if summary_line is None:
+        return {"status": "fail", "reason": "No pytest summary line with 'passed' found."}
+
+    if "failed" in summary_line or " error" in summary_line:
+        return {
+            "status": "fail",
+            "reason": f"pytest reported failures: {summary_line.strip()!r}",
+        }
+
+    m = re.search(r"(\d+)\s+passed", summary_line)
+    if m is None:
+        return {"status": "fail", "reason": f"Unparseable summary: {summary_line!r}"}
+    passed = int(m.group(1))
+    min_passed = int(evidence.get("min_passed", 1))
+    if passed < min_passed:
+        return {
+            "status": "fail",
+            "reason": f"Only {passed} tests passed; need ≥{min_passed}.",
+            "artifacts": {"passed": passed, "required": min_passed},
+        }
+    return {
+        "status": "pass",
+        "reason": f"pytest green: {passed} passed.",
+        "artifacts": {"passed": passed, "summary": summary_line.strip()},
+    }
+
+
 @register("verify_round_marker", Tier.TIER1)
 async def verify_round_marker(
     evidence: dict[str, Any], context: dict[str, Any]

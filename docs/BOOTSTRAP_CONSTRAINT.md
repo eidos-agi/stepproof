@@ -53,8 +53,31 @@ This looks backwards — shouldn't we validate before shipping? The ruling's ans
 
 If the post-ship run fails the gate (agent loops instead of pivots), Phase 3 does not proceed until the messaging or verifier-assisted-recovery redesign addresses it. This is the go/no-go gate — not a soft signal.
 
+## Status: Lifted (Post-Phase-2b)
+
+**As of Phase 2b shipping and the paired with/without experiments
+passing, this constraint is lifted for ongoing development on this
+repo.** The build-advisory / validate-post-ship sequence served its
+purpose: the adapter is real, the verification matrix proves it, and
+the thesis is backed by measurements.
+
+Ongoing development on this repo now runs under StepProof's own SDLC
+runbook — the repo dogfoods its own enforcement:
+
+```bash
+stepproof run start rb-stepproof-dev
+```
+
+See `examples/rb-stepproof-dev.yaml` for the gated cycle (plan →
+failing test → implementation → full suite green → docs → commit →
+optional push). **There is no override flag.** If a legitimate flow
+would require an escape, the ceremony is underspecified — fix the
+plan. The one clean exit for catastrophic bootstrap failure is
+`stepproof uninstall`, which is deliberate, logged, and reversible.
+
 ## Reference
 
 - Lighthouse north star `ns_6a9c5b21e351`, iteration 3: pivot signal, drift_category `monolithic-loop`.
 - Rhea challenge `debate_id dfae2e0578d4`, ruling: ACCEPT with surgical cuts.
 - Related: [docs/OPEN_QUESTIONS.md §Denial-Retry Loop](OPEN_QUESTIONS.md).
+- Ongoing: `examples/rb-stepproof-dev.yaml` — the dogfood runbook.

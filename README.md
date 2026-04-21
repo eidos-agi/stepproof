@@ -212,6 +212,7 @@ Agent governance is becoming legally actionable. StepProof's architecture is des
 
 ### Testing & Verification
 - [Verification Matrix](docs/VERIFICATION_MATRIX.md) — the four levels; what each proves
+- [Dogfooding](docs/DOGFOODING.md) — this repo runs its own development cycle under StepProof via `rb-stepproof-dev`
 - [Lessons from `claude-code-hooks-mastery`](docs/LESSONS_FROM_HOOKS_MASTERY.md) — hook idioms
 
 ### Context
@@ -228,7 +229,7 @@ Agent governance is becoming legally actionable. StepProof's architecture is des
 
 ## Status
 
-Alpha. Increment 1 of the runtime-handshake refactor is shipped: single-source-of-truth state contract, MCP/hook integration, four-level verification matrix, eight e2e scripts against real Claude Code, paired with/without experiments proving the thesis. 145/145 tests pass.
+Alpha. Increment 1 of the runtime-handshake refactor is shipped: single-source-of-truth state contract, MCP/hook integration, four-level verification matrix, eight e2e scripts against real Claude Code, paired with/without experiments proving the thesis. **This repo now dogfoods its own enforcement** via `examples/rb-stepproof-dev.yaml` (see [Dogfooding](docs/DOGFOODING.md)). 154/154 tests pass.
 
 Next:
 - Increment 2: standalone-daemon CLI migration, removal of legacy fallback
