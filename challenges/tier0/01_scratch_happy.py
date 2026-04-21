@@ -19,7 +19,7 @@ Flow:
        b. all three step_completes submitted
        c. no off-scope tool denials appear (because there's no
           hook to deny anything — the point of Tier 0)
-       d. audit log in runtime.db contains the causal chain
+       d. audit log in .stepproof/events.jsonl contains the causal chain
 """
 
 from __future__ import annotations
@@ -175,15 +175,20 @@ def run_claude(project: Path, cfg: Path, timeout_s: int):
 
 
 def query_audit_log(state_dir: Path) -> list[tuple[str, str]]:
-    import sqlite3
-    db = state_dir / "runtime.db"
-    if not db.exists():
+    """Read the filesystem-backed audit log (events.jsonl)."""
+    events_path = state_dir / "events.jsonl"
+    if not events_path.exists():
         return []
-    conn = sqlite3.connect(db)
-    rows = conn.execute(
-        "SELECT action_type, policy_id FROM audit_log ORDER BY timestamp"
-    ).fetchall()
-    conn.close()
+    rows: list[tuple[str, str]] = []
+    for line in events_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        rows.append((record.get("action_type", ""), record.get("policy_id", "")))
     return rows
 
 

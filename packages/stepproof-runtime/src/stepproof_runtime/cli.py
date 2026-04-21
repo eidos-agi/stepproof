@@ -198,8 +198,10 @@ DEFAULT_GITIGNORE_BLOCK = """\
 .stepproof/sessions/
 .stepproof/audit-buffer.jsonl
 .stepproof/adapter-manifest.json
-.stepproof/runtime.db
-.stepproof/runtime.db-*
+.stepproof/runs/
+.stepproof/events.jsonl
+.stepproof/runtime.url
+.stepproof/active-run.json
 """
 
 # Directories mirror .visionlog's artifact-per-folder convention.
@@ -312,7 +314,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     print(f"\nStepProof initialized at {sp_dir}")
     print("Tracked: config.yaml, runbooks/, overrides/, plans/")
-    print("Ignored: sessions/, audit-buffer.jsonl, adapter-manifest.json, runtime.db")
+    print("Ignored: sessions/, audit-buffer.jsonl, adapter-manifest.json, runs/, events.jsonl, runtime.url, active-run.json")
     return 0
 
 

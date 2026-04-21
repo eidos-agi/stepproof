@@ -88,9 +88,12 @@ and the runtime dispatches verifiers against the evidence.
 ### Step 6. Read the audit log
 
 ```bash
-sqlite3 .stepproof/runtime.db \
-  "SELECT substr(timestamp,12,8) AS t, action_type, decision, policy_id, substr(reason,1,80) AS reason \
-   FROM audit_log ORDER BY timestamp DESC LIMIT 30;"
+# Last 30 global events across all runs, newest first:
+tail -30 .stepproof/events.jsonl | jq -c '.'
+
+# Or a specific run's events:
+jq -r '[.timestamp[11:19], .action_type, .decision, .policy_id, (.reason // "" | .[:80])] | @tsv' \
+  .stepproof/runs/<run_id>/events.jsonl
 ```
 
 That's your compliance artifact. Timestamped, verifier-stamped,
@@ -251,8 +254,7 @@ advancing because the verifier is rejecting evidence.
 
 ```bash
 # Inspect current state:
-sqlite3 .stepproof/runtime.db \
-  "SELECT current_step, status FROM workflow_runs WHERE run_id = '<your run_id>';"
+jq '{current_step, status}' .stepproof/runs/<your run_id>/manifest.json
 
 # Abandon the run (no CLI today; hit the HTTP endpoint):
 # See .stepproof/runtime.url for the URL, then POST /runs/<id>/abandon.

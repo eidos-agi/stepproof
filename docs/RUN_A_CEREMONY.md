@@ -78,19 +78,27 @@ Removes hooks, settings, manifest. Reversible.
 
 ## Verify the audit log after a ceremony
 
+Per-run stream (authoritative for a single run):
+
 ```bash
-sqlite3 .stepproof/runtime.db \
-  "SELECT substr(timestamp,12,8) AS t, action_type, decision, policy_id, substr(reason,1,60) AS reason \
-   FROM audit_log WHERE run_id = '<run_id>' ORDER BY timestamp;"
+jq -r '[.timestamp[11:19], .action_type, .decision, .policy_id, (.reason // "" | .[:60])] | @tsv' \
+  .stepproof/runs/<run_id>/events.jsonl
 ```
 
-This is the ground truth — timestamps, verifier signatures, every policy decision, written by the runtime, not by the agent.
+Cross-run stream (global mirror, all runs combined):
+
+```bash
+jq -c '.' .stepproof/events.jsonl | tail -50
+```
+
+This is the ground truth — timestamps, verifier signatures, every policy decision, written by the runtime, not by the agent. JSONL is grep-able, diff-able, and committable.
 
 ## Files this ceremony exercises
 
 - `examples/rb-repo-simple.yaml` — the 3-step template.
 - `.claude/hooks/stepproof_pretooluse.py` — the enforcement point.
 - `packages/stepproof-runtime/src/stepproof_runtime/verifiers.py` — `verify_file_exists`, `verify_pytest_passed`, `verify_git_commit`.
-- `.stepproof/runtime.db` — audit log.
+- `.stepproof/runs/<run_id>/` — per-run manifest, step files, events.jsonl.
+- `.stepproof/events.jsonl` — global audit stream.
 
 That's the whole thing.

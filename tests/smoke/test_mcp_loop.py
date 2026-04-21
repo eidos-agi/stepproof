@@ -17,14 +17,17 @@ import pytest_asyncio
 
 @pytest_asyncio.fixture
 async def runtime_client(monkeypatch):
-    # Isolate DB + runbooks per test run.
+    # Isolate state dir + runbooks per test run.
     tmp = tempfile.mkdtemp(prefix="stepproof-test-")
-    db_path = str(Path(tmp) / "runtime.db")
-    monkeypatch.setenv("STEPPROOF_DB_PATH", db_path)
+    monkeypatch.setenv("STEPPROOF_STATE_DIR", str(Path(tmp) / ".stepproof"))
     examples_dir = str(
         Path(__file__).resolve().parents[2] / "examples"
     )
     monkeypatch.setenv("STEPPROOF_RUNBOOKS_DIR", examples_dir)
+
+    # Reset in-memory template registry so each test starts clean.
+    from stepproof_runtime import runbooks
+    runbooks.clear_registry()
 
     # Spin up the app via Uvicorn in-process.
     import uvicorn

@@ -181,7 +181,8 @@ def test_gitignore_rules_track_artifacts_ignore_runtime_state(tmp_project: Path)
         ".stepproof/sessions/",
         ".stepproof/audit-buffer.jsonl",
         ".stepproof/adapter-manifest.json",
-        ".stepproof/runtime.db",
+        ".stepproof/runs/",
+        ".stepproof/events.jsonl",
     ):
         assert pattern in gi, f".gitignore missing {pattern!r}"
 

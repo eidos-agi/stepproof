@@ -610,12 +610,16 @@ databases:
    cleared on COMPLETED.
 3. `.stepproof/evidence/s{N}-*.log` — tool output captures submitted
    as evidence.
-4. `.stepproof/runtime.db` — SQLite with:
-   - `workflow_runs` — the run's full lifecycle.
-   - `step_runs` — each step's status, attempts, evidence, verifier
-     result.
-   - `audit_log` — every policy decision in order, with timestamps,
-     reason, policy_id, payload_hash.
+4. `.stepproof/runs/<run_id>/` — one directory per run, holding:
+   - `manifest.json` — the run's full lifecycle (atomically rewritten
+     on status change).
+   - `step-<id>.json` — each step's status, attempts, evidence,
+     verifier result.
+   - `events.jsonl` — every policy decision for this run in order,
+     append-only, with timestamps, reason, policy_id, payload_hash.
+   - `heartbeat.json` — liveness tracker.
+   Plus `.stepproof/events.jsonl` — a global mirror of every run's
+   events for cross-run inspection.
 5. On GitHub: a PR with the migration, linked workflow runs, review
    comments.
 6. On the target DBs: new rows in the migration tracking table, with

@@ -49,8 +49,8 @@ secrets/
 .stepproof/sessions/
 .stepproof/audit-buffer.jsonl
 .stepproof/adapter-manifest.json
-.stepproof/runtime.db
-.stepproof/runtime.db-*
+.stepproof/runs/
+.stepproof/events.jsonl
 .stepproof/active-run.json
 .stepproof/runtime.url
 .stepproof.pre-init-backup/

@@ -24,8 +24,12 @@ async def client(monkeypatch):
     from stepproof_runtime.api import app
 
     tmp = tempfile.mkdtemp(prefix="stepproof-kmh-")
-    monkeypatch.setenv("STEPPROOF_DB_PATH", str(Path(tmp) / "runtime.db"))
+    monkeypatch.setenv("STEPPROOF_STATE_DIR", str(Path(tmp) / ".stepproof"))
     monkeypatch.setenv("STEPPROOF_RUNBOOKS_DIR", str(EXAMPLES_DIR))
+
+    # Reset in-memory template registry so each test starts clean.
+    from stepproof_runtime import runbooks
+    runbooks.clear_registry()
 
     port = 8798
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")

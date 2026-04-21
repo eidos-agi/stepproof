@@ -75,18 +75,28 @@ just blind          # Hook fires on ordinary work the agent wasn't expecting
 uv run python challenges/colder_warmer/compare.py  # the 2×2 above
 ```
 
-Results land in structured JSON you can audit. The `runtime.db` SQLite file after a run contains the full causal chain:
+Results land in structured JSON you can audit. Every ceremony writes a per-run directory and a global stream, both JSONL, human-readable, grep-able, commit-able:
+
+```bash
+# Per-run, authoritative for one ceremony:
+jq -r '[.timestamp[11:19], .action_type, .policy_id, (.reason // "" | .[:60])] | @tsv' \
+  .stepproof/runs/<run_id>/events.jsonl
+
+# Global mirror across all runs:
+tail .stepproof/events.jsonl | jq -c '.'
+```
+
+Example output:
 
 ```
-time      action_type                             policy                       reason
-21:32:35  plan.declared                           system.plan_declared         Declared plan: colder-warmer
-21:32:49  step.complete                           verifier.verify_round_marker Step s1 verified; advancing to s2
-21:32:56  step.complete                           verifier.verify_round_marker Step s2 verified; advancing to s3
+21:32:35  plan.declared    system.plan_declared          Declared plan: colder-warmer
+21:32:49  step.complete    verifier.verify_round_marker  Step s1 verified; advancing to s2
+21:32:56  step.complete    verifier.verify_round_marker  Step s2 verified; advancing to s3
 ...
-21:33:34  step.complete                           verifier.verify_round_marker Step s6 verified; advancing to COMPLETED
+21:33:34  step.complete    verifier.verify_round_marker  Step s6 verified; advancing to COMPLETED
 ```
 
-24 rows. Timestamped. Written by the runtime, not by the agent. Claude Code alone cannot produce that record.
+Timestamped. Written by the runtime, not by the agent. `git add .stepproof/runs/<run_id>/` if you want the audit trail in version control — the JSONL is diff-able, portable, and needs no tooling to read.
 
 ---
 

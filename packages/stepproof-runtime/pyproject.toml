@@ -12,7 +12,6 @@ dependencies = [
     "uvicorn>=0.32",
     "pydantic>=2.9",
     "pyyaml>=6.0",
-    "aiosqlite>=0.20",
 ]
 
 [project.scripts]
