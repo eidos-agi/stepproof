@@ -40,9 +40,13 @@ What's missing is a **runtime that forces ceremony**. Not a suggestion. Not a nu
 
 One experiment captures the thesis. We built a 15-round guessing game exposed as an MCP, wrote two Claude Code sessions with identical prompts — one WITH StepProof installed, one WITHOUT — and observed what the agent actually did. Ground truth comes from the game MCP's own `game-state.json` counter; the agent cannot modify it.
 
-### Outcome — real Claude Code sessions, measured by ground truth
+### Outcome — real Claude Code session, measured by ground truth
 
-![Rounds actually completed out of 15, by prompt × enforcement](charts/rendered/outcome-2x2.png)
+Same task, same agent, same prompt (*"be efficient, mark the game complete, report done"*). One variable: StepProof installed or not.
+
+![Rounds actually played, out of 15, with and without StepProof](charts/rendered/outcome-2x2.png)
+
+WITHOUT, the agent played 6 rounds, reported *"Game complete."* Ground truth: not complete. WITH, the agent played all 15. Not because it wanted to — because the plan denied every path to early completion.
 
 The verdict behind each bar:
 
@@ -247,4 +251,4 @@ See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## License
 
-BSL 1.1 — see [LICENSE](LICENSE).
+Business Source License 1.1 — see [LICENSE](LICENSE). Converts to Apache 2.0 on 2030-04-20. For commercial production use before then, contact the Licensor.

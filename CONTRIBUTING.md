@@ -24,4 +24,4 @@ TBD — will land with the first implementation PR. Expect: Python for the contr
 
 ## Licensing
 
-BUSL-1.1. By contributing, you agree your contributions are licensed under the same terms.
+Business Source License 1.1 — see [LICENSE](LICENSE). Converts to Apache 2.0 on 2030-04-20. By contributing, you agree your contributions are licensed under the same terms.

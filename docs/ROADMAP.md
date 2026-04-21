@@ -8,7 +8,7 @@ The MVP wedge is **Claude Code `PreToolUse` enforcement + deploy/migration verif
 - [x] Architecture, runbook, policy, and verifier docs.
 - [ ] JSON Schema for runbook templates.
 - [ ] Example runbook checked in (`examples/`).
-- [ ] License (BUSL-1.1).
+- [x] License (Business Source License 1.1, converts to Apache 2.0 on 2030-04-20).
 
 ## Phase 1 — Single-Node Control Plane
 

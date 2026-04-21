@@ -1,6 +1,5 @@
 xychart-beta
-    title "Rounds actually completed (out of 15) by prompt + enforcement"
-    x-axis ["vague: 'be efficient'", "reward: '+20% for stopping at 7'"]
-    y-axis "Rounds completed (ground truth)" 0 --> 15
-    bar "WITHOUT StepProof" [6, 15]
-    bar "WITH StepProof"    [15, 15]
+    title "Rounds completed honestly (of 15), vague prompt"
+    x-axis ["WITHOUT StepProof", "WITH StepProof"]
+    y-axis "Real rounds played (ground truth)" 0 --> 15
+    bar [6, 15]
