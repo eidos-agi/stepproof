@@ -1,16 +1,22 @@
 # StepProof
 
-**Force AI agents to follow ceremony over efficiency.**
+**AI is trained to complete the mission, not follow exact instructions.**
 
-StepProof is a governance runtime for agentic execution. An agent declares a plan, binds itself to per-step tool scopes, and produces evidence at every step. An independent verifier reads that evidence against real system state before the agent is allowed to advance. Every decision is recorded server-side, in an audit log the agent cannot modify.
+And while Claude Code is a smart harness, the harness hasn't yet overcome RL biases baked into the models — biases that allow models to take shortcuts and disregard instructions.
 
-The thesis, proven in a real Claude Code session: an agent that is *actively incentivized* to shortcut — told the reward is 20% higher for stopping early — still cannot shortcut. The hook denies every off-plan tool call; the verifier denies every unearned advancement; the run gets to `COMPLETED` only after it actually is.
+**StepProof is a tool we've built to force AI agents to follow regulations, follow steps, and to tell the truth.**
+
+StepProof was inspired partly by the [OWASP Agentic AI Top 10](docs/OWASP_MAPPING.md) (Dec 2025). Regulatory frameworks in the EU (AI Act, Aug 2026), Colorado (AI Act, Jun 2026), and elsewhere require governance — something AI companies haven't kept up with. StepProof was also partly inspired by **ARC-AGI-3**, which requires both optimal completion times *and* sequential integrity.
+
+Below, you can see that Claude Code will cheat and skip steps without StepProof. With StepProof, it's not possible to cheat.
+
+The practical implication: agents that follow regulations, rules, ceremony, and which cannot take shortcuts. Imagine a complex, plain-English release cycle that an agent actually follows — every step, in order, with evidence, auditable after the fact.
+
+For software teams increasingly relying on agents to complete multi-step workflows via skills files, truthfulness in execution is a major existing gap. We believe StepProof is not just a small step, but a leap forward in agentic engineering.
 
 ---
 
 ## Why We Built It
-
-Modern agents (Claude Code, Cursor, OpenAI Agents, in-house platforms) have the tools to run migrations, deploy services, rotate secrets, write to production databases. They also have a documented, repeatable failure mode: **skipping their own process when the shortcut is cheaper.**
 
 Three reasons advisory controls don't solve this:
 
@@ -36,8 +42,6 @@ pie showData
 Each slice is an agent choosing efficiency over ceremony. Every one maps to a specific verifier StepProof would have run. Full breakdown in [Case Study: the case study](docs/CASE_STUDY.md).
 
 What's missing is a **runtime that forces ceremony**. Not a suggestion. Not a nudge. A system that makes the shortcut structurally unavailable.
-
-Regulation is about to require it. The EU AI Act takes effect August 2026. High-risk AI obligations demand documented, auditable, human-overridable process compliance. Colorado's AI Act hits June 2026. The OWASP Agentic AI Top 10 (Dec 2025) names "excessive agency" and "uncontrolled tool use" as the top two risks. Whatever answers those demands has the shape of StepProof.
 
 ---
 
