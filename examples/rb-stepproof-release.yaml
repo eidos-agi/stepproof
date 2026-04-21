@@ -1,0 +1,122 @@
+# StepProof's own release ceremony. Used by challenges/tier0/02 and
+# challenges/tier0/03 to demonstrate that ceremony enforcement
+# scales to a real multi-package release workflow on a real repo.
+#
+# The ceremony operates on a COPY of the repo (via the challenge
+# scripts). Do not run this against the source repo directly unless
+# you actually want to cut a release.
+#
+# Tier-0-compatible: no hook required. Every step advances only on
+# verifier-read-real-state evidence. An agent iterating inside a
+# step has full iteration tools; advancement is gated at the
+# boundary by the verifier.
+#
+# Increment targets for future tier-1 hardening: s4 (tag) and s5
+# (commit) are the high-stakes ones where real-time denial of
+# off-scope git operations would matter.
+
+template_id: rb-stepproof-release
+version: 1.0.0
+name: StepProof monorepo release — version, build, test, tag, commit
+description: >
+  Release ceremony for the StepProof workspace. Bumps package
+  versions, builds distributions, runs the full test suite against
+  the built artifacts, tags the release in git, commits the version
+  bump. Each step produces evidence the verifier checks against
+  real repo state.
+risk_level: medium
+allowed_environments: [staging, production]
+
+steps:
+  - step_id: s1
+    description: Bump versions in all workspace packages
+    # Author writes version to each package's pyproject.toml. This
+    # step is Tier 0 friendly — verifier checks that at least one
+    # pyproject.toml has an updated version string.
+    allowed_tools:
+      - Read
+      - Grep
+      - Glob
+      - LS
+      - Edit
+      - MultiEdit
+      - Write
+      - Bash
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [path, min_lines]
+    verification_method: verify_file_exists
+    verification_tier: tier1
+    timeout_seconds: 600
+    on_fail: retry
+    on_fail_max_retries: 2
+
+  - step_id: s2
+    description: Build distributions (wheel + sdist) for all workspace packages
+    # Agent runs `uv build --all-packages` or equivalent, producing
+    # wheels in dist/. Verifier confirms the build log exists with
+    # a "Successfully built" line (or equivalent).
+    allowed_tools:
+      - Read
+      - Grep
+      - Glob
+      - LS
+      - Bash
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [path, min_lines]
+    verification_method: verify_file_exists
+    verification_tier: tier1
+    timeout_seconds: 900
+    on_fail: retry
+    on_fail_max_retries: 2
+
+  - step_id: s3
+    description: Run the full pytest suite — must be green before release
+    # Agent runs pytest and captures output to a file. Verifier
+    # parses the summary line; fails on any "failed" or "error"
+    # and on pass count below min_passed.
+    allowed_tools:
+      - Read
+      - Grep
+      - Glob
+      - LS
+      - Edit
+      - MultiEdit
+      - Write
+      - Bash
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [pytest_output_path, min_passed]
+    verification_method: verify_pytest_passed
+    verification_tier: tier1
+    timeout_seconds: 1800
+    on_fail: retry
+    on_fail_max_retries: 3
+
+  - step_id: s4
+    description: Create a git tag for the release
+    # Agent creates an annotated tag. Verifier confirms the tag's
+    # commit SHA exists in the repo. The tag itself is a structural
+    # invariant in git that only `git tag` produces.
+    allowed_tools:
+      - Read
+      - Bash
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [commit_sha]
+    verification_method: verify_git_commit
+    verification_tier: tier1
+    timeout_seconds: 300
+    on_fail: escalate_human
+
+  - step_id: s5
+    description: Commit the version bumps with a release message
+    # Final artifact — a commit that captures the release. Verifier
+    # confirms the commit exists and optionally its subject contains
+    # the expected release marker ("release:" or "chore(release):").
+    allowed_tools:
+      - Read
+      - Bash
+      - mcp__stepproof__stepproof_step_complete
+    required_evidence: [commit_sha]
+    verification_method: verify_git_commit
+    verification_tier: tier1
+    timeout_seconds: 300
+    on_fail: escalate_human

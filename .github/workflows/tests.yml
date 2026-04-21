@@ -1,0 +1,41 @@
+# CI workflow for the StepProof monorepo.
+#
+# Security note: this workflow only runs on code checked out from
+# the triggering commit. It does NOT interpolate any
+# github.event.* fields (issue titles, PR bodies, commit messages,
+# branch refs) into run: blocks, so it is not vulnerable to the
+# workflow-injection patterns documented at
+# https://github.blog/security/vulnerability-research/how-to-catch-github-actions-workflow-injections-before-attackers-do/.
+
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: setup Python
+        run: uv python install 3.11
+
+      - name: install workspace
+        run: uv sync --all-packages
+
+      - name: run smoke + integration tests
+        run: uv run pytest tests -q
