@@ -1,141 +1,91 @@
-# Runbook Model
+# Runbooks
 
-Runbooks are first-class, verification-aware objects. Every step declares what "done" means and how it will be checked.
+A runbook is a YAML file that declares the steps of a ceremony and what
+counts as evidence for each step. That's it.
 
-## Core Objects
+## Where they live
 
-### `RunbookTemplate`
+```
+<your-repo>/.stepproof/runbooks/*.yaml
+```
 
-The blueprint. Versioned, immutable once published.
+One file per ceremony. One directory per repo. **No env vars, no config
+file, no registry, no install command.** If a YAML file is in
+`.stepproof/runbooks/`, StepProof sees it.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `template_id` | string | Stable identifier, e.g. `rb-add-connector-fleetio` |
-| `version` | semver | Template version |
-| `name` | string | Human-readable name |
-| `description` | string | Why this runbook exists |
-| `risk_level` | enum | `low` \| `medium` \| `high` \| `critical` |
-| `allowed_environments` | string[] | Which envs this runbook can target |
-| `requires_human_signoff` | bool | Gate final merge/deploy on human approval |
-| `steps` | `StepTemplate[]` | Ordered sequence |
-
-### `StepTemplate`
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `step_id` | string | Stable within template (e.g. `s3`) |
-| `description` | string | What the worker is doing |
-| `allowed_tools` | string[] | Tool names permitted while on this step |
-| `denied_tools` | string[] | Explicit deny list (overrides allow) |
-| `required_evidence` | string[] | Keys the worker must submit at completion |
-| `verification_method` | string | Verifier function/template name |
-| `verification_tier` | enum | `tier1` \| `tier2` \| `tier3` |
-| `timeout_seconds` | int | Max time before step auto-fails |
-| `on_fail` | enum | `block` \| `retry` \| `escalate_human` |
-| `on_fail_max_retries` | int | Retry budget before escalation |
-
-### `WorkflowRun`
-
-A live instance of a template.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `run_id` | uuid | Instance identifier |
-| `template_id` | string | Source template |
-| `template_version` | semver | Pinned at start |
-| `owner_id` | string | Human sponsor |
-| `agent_id` | string | Worker agent instance |
-| `environment` | string | Target env |
-| `current_step` | string | Active step ID |
-| `status` | enum | `active` \| `blocked` \| `completed` \| `failed` \| `abandoned` |
-| `started_at` | timestamp | |
-| `ended_at` | timestamp \| null | |
-
-### `StepRun`
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `run_id` | uuid | Parent workflow |
-| `step_id` | string | Template step |
-| `status` | enum | `pending` \| `in_progress` \| `awaiting_verification` \| `verified` \| `failed` \| `blocked` |
-| `evidence` | map | Key/value payload submitted by worker |
-| `verification_result` | `VerificationResult` \| null | |
-| `attempts` | int | Retry counter |
-
-## Example: DB Migration + Deploy
+## What one looks like
 
 ```yaml
-template_id: rb-db-migration-and-deploy
+template_id: rb-deploy
 version: 1.0.0
-name: Apply DB migration and deploy service
+name: Deploy to production
 risk_level: high
-allowed_environments: [staging, production]
-requires_human_signoff: true
 
 steps:
   - step_id: s1
-    description: Author migration file and open PR
-    allowed_tools: [editor, git]
-    required_evidence: [branch_name, pr_url]
-    verification_method: verify_pr_opened
-    verification_tier: tier1
-    timeout_seconds: 3600
-    on_fail: retry
-    on_fail_max_retries: 2
+    description: Run the full test suite
+    required_evidence: [pytest_output_path, min_passed]
+    verification_method: verify_pytest_passed
 
   - step_id: s2
-    description: CI tests pass on PR
-    allowed_tools: [ci_cli]
-    required_evidence: [ci_run_id]
-    verification_method: verify_ci_green
-    verification_tier: tier1
-    timeout_seconds: 1800
-    on_fail: block
-
-  - step_id: s3
-    description: Apply migration to staging
-    allowed_tools: [cerebro_migrate_staging]
-    denied_tools: [psql, pg_dump, pg_restore]
-    required_evidence: [migration_name, staging_db_id, deploy_id]
-    verification_method: verify_migration_applied
-    verification_tier: tier1
-    timeout_seconds: 600
-    on_fail: escalate_human
-
-  - step_id: s4
-    description: Smoke-test staging
-    allowed_tools: [http_probe, log_reader]
-    required_evidence: [smoke_run_id]
-    verification_method: verify_smoke_logs
-    verification_tier: tier2
-    timeout_seconds: 900
-    on_fail: block
-
-  - step_id: s5
-    description: Apply migration to production
-    allowed_tools: [cerebro_migrate_production]
-    denied_tools: [psql, pg_dump, pg_restore]
-    required_evidence: [migration_name, prod_db_id, deploy_id]
-    verification_method: verify_migration_applied
-    verification_tier: tier1
-    timeout_seconds: 600
-    on_fail: escalate_human
-
-  - step_id: s6
-    description: Deploy service to production
-    allowed_tools: [deploy_cli]
-    required_evidence: [deploy_id]
-    verification_method: verify_deploy_and_health
-    verification_tier: tier2
-    timeout_seconds: 900
-    on_fail: escalate_human
+    description: Merge the release PR
+    required_evidence: [commit_sha]
+    verification_method: verify_git_commit
 ```
 
-## Authoring Guidelines
+Every step names (1) what evidence the agent has to produce, and (2)
+what verifier reads real state to pass/fail. The verifier is the thing
+the agent can't lie past.
 
-1. **Every step must be independently verifiable.** If you can't write a verifier for it, split the step or reconsider whether it belongs in an enforced runbook.
-2. **Prefer Tier 1 verification.** Escalate to Tier 2 only when evidence is unstructured. Tier 3 is opt-in per step.
-3. **Deny sanctioned-bypass tools explicitly.** If `cerebro-migrate` exists, deny raw `psql` at migration steps.
-4. **Require concrete evidence.** `migration_name` + `deploy_id` beats a free-text "done". Evidence is what the verifier consumes.
-5. **Set realistic timeouts.** A step that blocks for hours is a hole in the governance layer.
-6. **Mark high-risk runbooks `requires_human_signoff: true`.** Verifiers are a guard, not a replacement for human accountability on destructive or regulated operations.
+## Using one
+
+Two modes, same YAML.
+
+**Pre-registered** — operator writes + commits the YAML; agent runs it:
+
+```
+stepproof_run_start  template_id: "rb-deploy"
+stepproof_step_complete  run_id: ...  step_id: "s1"  evidence: {...}
+```
+
+**Inline (keep-me-honest)** — agent declares the plan at runtime, no
+YAML needed. Use this for one-offs the agent is running on its own
+recognizance.
+
+## Getting StepProof's example runbooks into your repo
+
+Copy them. They're examples, not magic:
+
+```bash
+cp /path/to/stepproof/examples/rb-stepproof-release.yaml \
+   <your-repo>/.stepproof/runbooks/
+```
+
+Your repo, your copy. Upstream changes don't mutate your runbooks until
+you re-copy.
+
+## The multi-repo caveat
+
+Today, the StepProof MCP server discovers runbooks from its own `cwd`.
+Started in repo A → sees repo A's runbooks. Claude Code sessions that
+span multiple repos hit this edge.
+
+Planned fix: `stepproof_runbook_list(cwd="/path/to/repo")` — caller
+names the repo per call. Same pattern as `git -C <path>`. When that
+ships, the `STEPPROOF_RUNBOOKS_DIR` env var + the `examples/` fallback
+will be removed. Only `<cwd>/.stepproof/runbooks/` will be in scope.
+
+## Design principle
+
+StepProof is about giving agents simple instructions they can't lie
+about. That includes how the instructions themselves are distributed.
+A runbook should be readable as text, live next to the code it
+governs, version-controlled like every other config file, and not
+require explaining where it came from. `.stepproof/runbooks/*.yaml`
+is the whole story.
+
+## Related
+
+- [TIERS](TIERS.md) — adoption tiers.
+- [KEEP_ME_HONEST](KEEP_ME_HONEST.md) — the inline-plan mode.
+- [HONEST_LIMITS](HONEST_LIMITS.md) — runbook drift is real; named there.
