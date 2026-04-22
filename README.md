@@ -243,6 +243,7 @@ Agent governance is becoming legally actionable. StepProof's architecture is des
 - [Hook Integration](docs/HOOKS.md) — `PreToolUse` contract, exit codes
 
 ### Using StepProof
+- **[The Gap](docs/THE_GAP.md)** — why this exists and why the big AI labs haven't built it. Starts from the v0.1.0 release, which was gated by StepProof's own ceremony.
 - **[Enforcement Tiers](docs/TIERS.md)** — the three layered adoption tiers. Start at Tier 0: evidence + audit, no hook, no session friction.
 - **[Honest Limits](docs/HONEST_LIMITS.md)** — the three gaps the pitch doesn't name: runbook drift, exception/override workflows, real platform-team cost.
 - **[Deploy to Your Project](docs/DEPLOY_TO_YOUR_PROJECT.md)** — 5-minute Tier 0 install + customization. Add Tier 1 (hook) for specific high-stakes ceremonies when you feel the gap.
