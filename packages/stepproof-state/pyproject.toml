@@ -1,6 +1,6 @@
 [project]
 name = "stepproof-state"
-version = "0.0.1"
+version = "0.1.0"
 description = "StepProof state-directory primitives — atomic writes, runtime discovery, active-run binding"
 readme = "README.md"
 requires-python = ">=3.11"

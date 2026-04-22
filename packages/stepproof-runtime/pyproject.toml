@@ -1,6 +1,6 @@
 [project]
 name = "stepproof-runtime"
-version = "0.0.1"
+version = "0.1.0"
 description = "StepProof control plane — policy engine, verifier dispatch, audit log"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -1,6 +1,6 @@
 [project]
 name = "stepproof-mcp"
-version = "0.0.1"
+version = "0.1.0"
 description = "StepProof MCP server — exposes StepProof governance over Model Context Protocol"
 readme = "README.md"
 requires-python = ">=3.11"
