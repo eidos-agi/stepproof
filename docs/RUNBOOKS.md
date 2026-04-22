@@ -86,6 +86,7 @@ is the whole story.
 
 ## Related
 
+- [RUNBOOK_MODEL](RUNBOOK_MODEL.md) — the schema reference: every field on `RunbookTemplate`, `StepTemplate`, `WorkflowRun`. Look here when you need the exact shape.
 - [TIERS](TIERS.md) — adoption tiers.
 - [KEEP_ME_HONEST](KEEP_ME_HONEST.md) — the inline-plan mode.
 - [HONEST_LIMITS](HONEST_LIMITS.md) — runbook drift is real; named there.
