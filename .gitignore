@@ -61,3 +61,7 @@ secrets/
 
 # Claude Code per-project settings. Reinstall via `stepproof install` to regenerate.
 .claude/
+.scratch/
+
+# Hone notebook for this repo — per-target state, not source of truth
+.hone/

@@ -15,7 +15,9 @@ A runbook YAML in your project. That's it.
 - Per-step structured evidence requirements.
 - Verifiers that read real external state at step boundaries.
 - Advancement gated on verifier pass.
-- A tamper-evident(-ish) audit log of every decision in SQLite.
+- A hash-chained, tamper-evident audit log on disk
+  (`.stepproof/runs/*/events.jsonl` + `.stepproof/events.jsonl`).
+  Verify with `stepproof audit verify`.
 
 **What you don't get:**
 - **Real-time denial** of off-scope tool calls. The agent *could*

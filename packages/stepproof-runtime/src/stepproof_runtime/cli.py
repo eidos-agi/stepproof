@@ -10,6 +10,7 @@ Subcommands:
   stepproof run list         — list recent runs
   stepproof step complete <run_id> <step_id> --evidence k=v ...
   stepproof audit            — tail the audit log
+  stepproof metrics          — off-rails rate + counters from events.jsonl
   stepproof install          — wire StepProof into the current project's Claude Code
   stepproof version
 
@@ -318,6 +319,49 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit_verify(args: argparse.Namespace) -> int:
+    """Verify the hash chain of an events.jsonl file is intact."""
+    from pathlib import Path
+
+    from stepproof_runtime import store
+
+    if args.run_id:
+        path = store.run_dir(args.run_id) / "events.jsonl"
+    elif args.path:
+        path = Path(args.path).resolve()
+    else:
+        path = store.global_events_path()
+
+    if not path.exists():
+        print(f"no audit log at {path}")
+        return 1
+
+    ok, n, reason = store.verify_audit_chain(path)
+    if ok:
+        print(f"OK — {n} records, chain intact ({path})")
+        return 0
+    print(f"BROKEN — checked {n} records; {reason} ({path})")
+    return 2
+
+
+def cmd_metrics(args: argparse.Namespace) -> int:
+    """Compute off-rails rate + related counters from events.jsonl.
+
+    Runs locally against `.stepproof/runs/*/events.jsonl` — no HTTP, no
+    runtime required. The point is that any team can point this at their
+    own audit log after 2-3 weeks of use and get a ground-truth answer
+    to the ROI question (Q1-Q5) rather than relying on modeled guesses.
+    """
+    from stepproof_runtime import metrics
+
+    m = metrics.compute(run_id=args.run_id, days=args.days)
+    if args.json:
+        print(json.dumps(m, indent=2))
+    else:
+        print(metrics.format_report(m))
+    return 0
+
+
 def cmd_version(args: argparse.Namespace) -> int:
     print(VERSION)
     return 0
@@ -369,8 +413,19 @@ def build_parser() -> argparse.ArgumentParser:
     pstep_complete.set_defaults(func=cmd_step_complete)
 
     paudit = sub.add_parser("audit", help="Show recent audit events")
+    paudit_sub = paudit.add_subparsers(dest="audit_cmd")
     paudit.add_argument("--run-id")
     paudit.set_defaults(func=cmd_audit)
+
+    paudit_verify = paudit_sub.add_parser(
+        "verify",
+        help="Verify the audit log's hash chain is intact",
+    )
+    paudit_verify.add_argument("--run-id", help="Verify a single run's log")
+    paudit_verify.add_argument(
+        "--path", help="Verify an arbitrary events.jsonl file"
+    )
+    paudit_verify.set_defaults(func=cmd_audit_verify)
 
     pinst = sub.add_parser("install", help="Wire StepProof into Claude Code")
     pinst.add_argument("--scope", choices=["user", "project"], default="user",
@@ -388,6 +443,18 @@ def build_parser() -> argparse.ArgumentParser:
     pinit.add_argument("--force", action="store_true",
                        help="Regenerate .stepproof/config.yaml (new UUID)")
     pinit.set_defaults(func=cmd_init)
+
+    pmet = sub.add_parser(
+        "metrics",
+        help="Compute off-rails rate + related counters from events.jsonl",
+    )
+    pmet.add_argument("--run-id", help="Restrict to a single run")
+    pmet.add_argument(
+        "--days", type=int,
+        help="Only include events within the last N days",
+    )
+    pmet.add_argument("--json", action="store_true", help="Emit raw JSON")
+    pmet.set_defaults(func=cmd_metrics)
 
     pver = sub.add_parser("version", help="Show version")
     pver.set_defaults(func=cmd_version)

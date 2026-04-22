@@ -98,6 +98,23 @@ Example output:
 
 Timestamped. Written by the runtime, not by the agent. `git add .stepproof/runs/<run_id>/` if you want the audit trail in version control — the JSONL is diff-able, portable, and needs no tooling to read.
 
+Each record is hash-chained: every event carries a SHA-256 `hash` over its contents plus the `prev_hash` of the previous event in the same stream. Retroactive edits are detectable.
+
+```bash
+stepproof audit verify                        # global stream
+stepproof audit verify --run-id <run_id>      # one run's stream
+```
+
+After a few weeks of real use, measure the empirical off-rails rate (deny_count + wedged_runs) / enforcement_opportunities — the number that drives the Q1–Q5 ROI quintile — directly from your own audit log:
+
+```bash
+stepproof metrics              # human-readable report
+stepproof metrics --json       # scriptable output
+stepproof metrics --days 14    # rolling window
+```
+
+No modeled guesses, no vendor dashboards — the answer is in your `events.jsonl`.
+
 ---
 
 ## How It Works
@@ -227,6 +244,7 @@ Agent governance is becoming legally actionable. StepProof's architecture is des
 
 ### Using StepProof
 - **[Enforcement Tiers](docs/TIERS.md)** — the three layered adoption tiers. Start at Tier 0: evidence + audit, no hook, no session friction.
+- **[Honest Limits](docs/HONEST_LIMITS.md)** — the three gaps the pitch doesn't name: runbook drift, exception/override workflows, real platform-team cost.
 - **[Deploy to Your Project](docs/DEPLOY_TO_YOUR_PROJECT.md)** — 5-minute Tier 0 install + customization. Add Tier 1 (hook) for specific high-stakes ceremonies when you feel the gap.
 - [Run a Ceremony on This Repo](docs/RUN_A_CEREMONY.md) — the `rb-repo-simple` 3-step demo (Tier 1).
 
@@ -250,7 +268,7 @@ Agent governance is becoming legally actionable. StepProof's architecture is des
 
 ## Status
 
-Alpha. Increment 1 of the runtime-handshake refactor is shipped: single-source-of-truth state contract, MCP/hook integration, four-level verification matrix, eight e2e scripts against real Claude Code, paired with/without experiments proving the thesis. **This repo now dogfoods its own enforcement** via `examples/rb-stepproof-dev.yaml` (see [Dogfooding](docs/DOGFOODING.md)). 154/154 tests pass.
+Alpha. Increment 1 of the runtime-handshake refactor is shipped: single-source-of-truth state contract, MCP/hook integration, four-level verification matrix, eight e2e scripts against real Claude Code, paired with/without experiments proving the thesis. **This repo now dogfoods its own enforcement** via `examples/rb-stepproof-dev.yaml` (see [Dogfooding](docs/DOGFOODING.md)). Hash-chained audit log + `stepproof metrics` for empirical off-rails rate from your own `events.jsonl`. 160/160 tests pass.
 
 Next:
 - Increment 2: standalone-daemon CLI migration, removal of legacy fallback

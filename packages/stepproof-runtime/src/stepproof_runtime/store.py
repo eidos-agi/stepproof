@@ -24,6 +24,7 @@ git-diffable, and mailable without tooling.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -336,14 +337,103 @@ def _event_to_record(event: AuditEvent) -> dict:
     }
 
 
+def _last_line_hash(path: Path) -> str | None:
+    """Return the `hash` field of the last JSONL line, or None if empty.
+
+    Seeks to the tail of the file rather than scanning — O(1) per append
+    regardless of history size. Assumes a single line is under 8 KiB,
+    which holds for our audit records.
+    """
+    try:
+        size = path.stat().st_size
+    except FileNotFoundError:
+        return None
+    if size == 0:
+        return None
+    window = min(size, 8192)
+    with path.open("rb") as f:
+        f.seek(size - window)
+        data = f.read()
+    data = data.rstrip(b"\n\r")
+    idx = data.rfind(b"\n")
+    last = data[idx + 1:] if idx >= 0 else data
+    if not last:
+        return None
+    try:
+        return json.loads(last).get("hash")
+    except json.JSONDecodeError:
+        return None
+
+
+def _hash_record(record: dict) -> str:
+    """SHA-256 over the canonical JSON encoding of the record."""
+    canonical = json.dumps(
+        record, sort_keys=True, default=_json_default
+    ).encode()
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _chain(record: dict, prev_hash: str | None) -> dict:
+    """Attach prev_hash, then compute and attach hash."""
+    chained = {**record, "prev_hash": prev_hash}
+    chained["hash"] = _hash_record(chained)
+    return chained
+
+
 def append_event(event: AuditEvent) -> None:
-    """Append an event to the per-run stream and the global stream."""
+    """Append an event to the per-run stream and the global stream.
+
+    Each stream is hash-chained independently: every record carries
+    ``prev_hash`` (the hash of the previous record in the same stream)
+    and ``hash`` (SHA-256 over the record including prev_hash). This
+    makes retroactive tampering detectable with ``verify_audit_chain``.
+    """
     record = _event_to_record(event)
-    # Per-run stream (authoritative for "what happened in this run").
     if event.run_id is not None:
-        _append_jsonl(run_dir(event.run_id) / "events.jsonl", record)
-    # Global stream (convenience mirror for cross-run queries).
-    _append_jsonl(global_events_path(), record)
+        per_run_path = run_dir(event.run_id) / "events.jsonl"
+        per_run_chained = _chain(record, _last_line_hash(per_run_path))
+        _append_jsonl(per_run_path, per_run_chained)
+    glob_path = global_events_path()
+    glob_chained = _chain(record, _last_line_hash(glob_path))
+    _append_jsonl(glob_path, glob_chained)
+
+
+def verify_audit_chain(path: Path) -> tuple[bool, int, str | None]:
+    """Walk an events.jsonl file and verify the hash chain.
+
+    Returns ``(ok, records_checked, failure_reason)``. On the first
+    mismatch, ``ok`` is False and ``failure_reason`` names what broke
+    (missing hash, bad prev_hash link, or hash mismatch).
+    """
+    if not path.exists():
+        return True, 0, None
+    prev_hash: str | None = None
+    count = 0
+    with path.open("r", encoding="utf-8") as f:
+        for lineno, raw in enumerate(f, 1):
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                rec = json.loads(raw)
+            except json.JSONDecodeError:
+                return False, count, f"line {lineno}: invalid JSON"
+            claimed_hash = rec.get("hash")
+            claimed_prev = rec.get("prev_hash")
+            if claimed_hash is None:
+                return False, count, f"line {lineno}: no hash field"
+            if claimed_prev != prev_hash:
+                return False, count, (
+                    f"line {lineno}: prev_hash={claimed_prev!r} "
+                    f"does not match previous={prev_hash!r}"
+                )
+            stripped = {k: v for k, v in rec.items() if k != "hash"}
+            recomputed = _hash_record(stripped)
+            if recomputed != claimed_hash:
+                return False, count, f"line {lineno}: hash mismatch"
+            prev_hash = claimed_hash
+            count += 1
+    return True, count, None
 
 
 def list_events(run_id: UUID | str | None = None, limit: int = 100) -> list[dict]:
