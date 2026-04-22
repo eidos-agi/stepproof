@@ -21,8 +21,15 @@ _TEMPLATES: dict[str, RunbookTemplate] = {}
 
 
 def runbooks_dir() -> Path:
-    raw = os.getenv("STEPPROOF_RUNBOOKS_DIR", "examples")
-    return Path(raw).expanduser()
+    raw = os.getenv("STEPPROOF_RUNBOOKS_DIR")
+    if raw:
+        return Path(raw).expanduser()
+    # Default: scan .stepproof/runbooks/ in cwd (the repo Claude Code is pointed at)
+    local = Path.cwd() / ".stepproof" / "runbooks"
+    if local.exists():
+        return local
+    # Fallback: examples/ in the stepproof repo itself
+    return Path("examples")
 
 
 def _load_file(path: Path) -> RunbookTemplate:
