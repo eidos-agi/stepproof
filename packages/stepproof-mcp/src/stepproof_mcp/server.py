@@ -284,6 +284,106 @@ async def stepproof_runbook_get(template_id: str) -> dict[str, Any]:
         return r.json()
 
 
+# ── Routing table ─────────────────────────────────────────
+# Maps intent keywords to runbook template_ids.
+# Each entry: (template_id, triggers, description)
+# "triggers" are keyword sets — if ANY set is a subset of the
+# intent words, the runbook matches.
+
+_RUNBOOK_ROUTES: list[tuple[str, list[set[str]], str]] = [
+    ("rb-ship-to-staging", [
+        {"ship", "staging"}, {"merge", "develop"}, {"deploy", "staging"},
+        {"pr", "develop"}, {"feature", "branch"},
+    ], "Ship a feature branch to staging — issue, PR, CI, merge, deploy, smoke test"),
+    ("rb-promote-to-production", [
+        {"promote", "production"}, {"production", "deploy"}, {"merge", "main"},
+        {"release", "production"},
+    ], "Promote staging to production — Rhea gate required"),
+    ("rb-quick-fix", [
+        {"quick", "fix"}, {"typo"}, {"one-liner"}, {"hotfix"}, {"css", "fix"},
+        {"parse", "bug"},
+    ], "Small bug fix — one-liner, typo, CSS tweak. No full ceremony"),
+    ("rb-apply-migration", [
+        {"migration"}, {"ddl"}, {"schema", "change"}, {"alter", "table"},
+        {"create", "table"}, {"sql", "function"},
+    ], "Apply a Supabase migration from cerebro-migrations"),
+    ("rb-data-daemon-deploy", [
+        {"data-daemon", "deploy"}, {"pipeline", "deploy"}, {"daemon", "deploy"},
+        {"extraction", "deploy"}, {"connector", "deploy"},
+    ], "Deploy data-daemon extraction pipeline"),
+    ("rb-ship-cerebro-mcp", [
+        {"cerebro-mcp", "deploy"}, {"cloudflare", "deploy"}, {"mcp", "ship"},
+        {"wrangler", "deploy"}, {"cerebro-mcp", "ship"},
+    ], "Ship cerebro-mcp to Cloudflare Workers"),
+    ("rb-page-audit", [
+        {"page", "audit"}, {"dashboard", "audit"}, {"stale", "page"},
+        {"page", "data"}, {"page", "broken"}, {"why", "page", "show"},
+    ], "Audit a dashboard page after shipping a data source or registry"),
+    ("rb-verify-data", [
+        {"verify", "data"}, {"data", "correct"}, {"numbers", "right"},
+        {"ground", "truth"}, {"parity"},
+    ], "Verify dashboard data against warehouse ground truth"),
+    ("rb-vendor-onboard", [
+        {"vendor", "onboard"}, {"new", "vendor"}, {"api", "onboard"},
+        {"connector", "new"},
+    ], "Onboard a new vendor API — probe, vault, prototype, pipeline"),
+    ("rb-bless-period", [
+        {"bless", "period"}, {"golden", "fixture"}, {"close", "period"},
+        {"accounting", "period"},
+    ], "Bless a closed accounting period as golden fixture"),
+    ("rb-merge-t1", [
+        {"merge", "t1"}, {"production", "pr"}, {"tier1", "merge"},
+    ], "Merge a PR to a Tier 1 production repo"),
+    ("rb-chronicle-release", [
+        {"chronicle"}, {"newsletter"}, {"edition"},
+    ], "Publish a new edition of The Cerebro Chronicle"),
+    ("rb-checkpoint", [
+        {"checkpoint"}, {"land"}, {"touch-and-go"}, {"session", "save"},
+    ], "Session checkpoint — land or touch-and-go"),
+    ("rb-forge-runbook", [
+        {"new", "runbook"}, {"create", "runbook"}, {"forge", "runbook"},
+        {"ceremony", "create"}, {"new", "ceremony"},
+    ], "Create a new StepProof runbook from a successful manual run"),
+]
+
+
+@mcp.tool()
+async def stepproof_which_runbook(intent: str) -> dict[str, Any]:
+    """Given what you're about to do, find the right runbook.
+
+    Describe your intent in plain English (e.g., "deploy data-daemon to staging",
+    "audit the connections page", "ship a bug fix"). Returns matching runbooks
+    ranked by relevance, or "none" if no ceremony is required.
+    """
+    words = set(intent.lower().split())
+    matches: list[dict[str, Any]] = []
+
+    for template_id, trigger_sets, description in _RUNBOOK_ROUTES:
+        # Score = number of trigger sets matched
+        hit_count = sum(1 for ts in trigger_sets if ts.issubset(words))
+        if hit_count > 0:
+            matches.append({
+                "template_id": template_id,
+                "description": description,
+                "relevance": hit_count,
+            })
+
+    matches.sort(key=lambda m: m["relevance"], reverse=True)
+
+    if not matches:
+        return {
+            "matches": [],
+            "advice": "No runbook matches this intent. If this is a risky or "
+                       "repeatable action, consider creating one with rb-forge-runbook.",
+        }
+
+    return {
+        "matches": matches,
+        "recommended": matches[0]["template_id"],
+        "advice": f"Use {matches[0]['template_id']} — {matches[0]['description']}",
+    }
+
+
 @mcp.tool()
 async def stepproof_keep_me_honest(
     intent: str,
